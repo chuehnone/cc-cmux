@@ -17,7 +17,8 @@ function runHook(env) {
     let stderr = "";
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
-    child.on("close", (code) => resolve({ code, stdout, stderr, ms: Date.now() - t0 }));
+    const killer = setTimeout(() => child.kill("SIGKILL"), 4000);
+    child.on("close", (code) => { clearTimeout(killer); resolve({ code, stdout, stderr, ms: Date.now() - t0 }); });
     child.stdin.end("{}");
   });
 }
@@ -55,7 +56,7 @@ test("有 CMUX_SOCKET_CAPABILITY 時，前面加上 _cmux_capability_v1", () => 
   assert.equal(buildPayload({ ...cmuxEnv, CMUX_SOCKET_CAPABILITY: "cap" }, 4242), "_cmux_capability_v1 cap set_agent_pid cc-cmux.claude.4242 4242 --tab=T1");
 });
 
-test("直接執行時，把指令送到 cmux socket，stdout 是空的", async () => {
+test("直接執行時，把指令送到 cmux socket，stdout 是空的", { timeout: 5000 }, async () => {
   const sock = join(mkdtempSync(join(tmpdir(), "cc-cmux-hook-")), "s.sock");
   const received = [];
   const server = createServer((c) => {
@@ -69,4 +70,21 @@ test("直接執行時，把指令送到 cmux socket，stdout 是空的", async (
   assert.equal(result.code, 0);
   assert.equal(result.stdout, "");
   assert.deepEqual(received, ["set_agent_pid cc-cmux.claude.777 777 --tab=T1\n"]);
+});
+
+test("socket 不存在時，1 秒內 exit 0，stdout 是空的", { timeout: 5000 }, async () => {
+  const result = await runHook({ ...cmuxEnv, CMUX_SOCKET_PATH: join(tmpdir(), "cc-cmux-no-such-socket.sock") });
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, "");
+  assert.ok(result.ms < 1000, "花了 " + result.ms + "ms");
+});
+
+test("socket 一直不回應時，1 秒內 exit 0", { timeout: 5000 }, async () => {
+  const sock = join(mkdtempSync(join(tmpdir(), "cc-cmux-hook-")), "s.sock");
+  const server = createServer(() => {});
+  await new Promise((r) => server.listen(sock, r));
+  const result = await runHook({ ...cmuxEnv, CMUX_SOCKET_PATH: sock });
+  server.close();
+  assert.equal(result.code, 0);
+  assert.ok(result.ms < 1500, "花了 " + result.ms + "ms");
 });
