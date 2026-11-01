@@ -48,10 +48,43 @@ cmux 只從 `~/.config/cmux/sidebars/` 讀 sidebar。照這個順序做：
    cmux right-sidebar set custom services
    ```
 
+### 讓每個 Claude Code session 都被記錄（選用）
+
+cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 workspace 有多個 Claude Code session 時，只有最後送出 hook 的那一個被記錄，其他 session 用背景 shell 啟動的服務就不會出現在面板上。
+
+`hooks/register-agent.mjs` 是一個 Claude Code hook。它用 `cc-cmux.claude.<PID>` 當 key，把每個 session 另外登記給 cmux。
+
+安裝：在 `~/.claude/settings.json` 的 `hooks` 加上兩個事件。`<cc-cmux 的路徑>` 換成這個 repo 的絕對路徑。
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node <cc-cmux 的路徑>/hooks/register-agent.mjs" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node <cc-cmux 的路徑>/hooks/register-agent.mjs" }] }
+    ]
+  }
+}
+```
+
+已有其他 hook 時，把這兩筆加進對應事件的陣列，不要覆蓋原有的設定。
+
+行為：
+
+- 不在 cmux 裡（沒有 `CMUX_SOCKET_PATH` 或 `CMUX_SURFACE_ID`），或 `CMUX_CLAUDE_HOOKS_DISABLED=1` 時，什麼都不做。
+- 不印任何 stdout，最多等 cmux 1 秒，一律 exit 0。
+- 要看錯誤時，設定 `CC_CMUX_HOOK_DEBUG=1`，錯誤會寫到 stderr。
+
+移除：從 `~/.claude/settings.json` 刪掉這兩筆。已登記的 PID 會在 Claude 結束後由 cmux 清掉。
+
 ### 已知限制
 
 - 面板只列出有開 port 的服務。背景執行但沒有開 port 的 shell（例如 build、test）不會出現。
 - 背景服務只有在 cmux 把啟動它的程式記錄成 agent 時才會出現。
+- 同一個 workspace 有多個 Claude Code session 時，沒裝上面的 hook，背景服務會時有時無。
+- 這個 hook 用的是 cmux 沒有公開文件的 socket 指令 `set_agent_pid`。cmux 改版後可能失效。
 - 面板看不出背景服務是哪個 agent 啟動的。
 - 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
