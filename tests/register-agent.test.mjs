@@ -26,3 +26,7 @@ test("沒有 CMUX_TAB_ID 時不送", () => {
   const { CMUX_TAB_ID, ...env } = cmuxEnv;
   assert.equal(buildPayload(env, 4242), null);
 });
+
+test("有 CMUX_CLAUDE_PID 時，key 與 PID 都用它", () => {
+  assert.equal(buildPayload({ ...cmuxEnv, CMUX_CLAUDE_PID: "777" }, 4242), "set_agent_pid cc-cmux.claude.777 777 --tab=T1");
+});
