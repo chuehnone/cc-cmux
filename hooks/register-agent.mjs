@@ -13,7 +13,10 @@ function send(path, payload) {
   setTimeout(finish, 1000);
   const socket = createConnection(path);
   socket.on("connect", () => socket.end(payload + "\n"));
-  socket.on("error", finish);
+  socket.on("error", (e) => {
+    if (process.env.CC_CMUX_HOOK_DEBUG === "1") process.stderr.write("cc-cmux register-agent: " + e.message + "\n");
+    finish();
+  });
   socket.on("close", finish);
   socket.resume();
 }

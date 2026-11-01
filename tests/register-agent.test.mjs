@@ -88,3 +88,13 @@ test("socket 一直不回應時，1 秒內 exit 0", { timeout: 5000 }, async () 
   assert.equal(result.code, 0);
   assert.ok(result.ms < 1500, "花了 " + result.ms + "ms");
 });
+
+test("CC_CMUX_HOOK_DEBUG=1 時才把錯誤寫到 stderr", { timeout: 5000 }, async () => {
+  const env = { ...cmuxEnv, CMUX_SOCKET_PATH: join(tmpdir(), "cc-cmux-no-such-socket.sock") };
+  const quiet = await runHook(env);
+  const loud = await runHook({ ...env, CC_CMUX_HOOK_DEBUG: "1" });
+  assert.equal(quiet.stderr, "");
+  assert.match(loud.stderr, /cc-cmux/);
+  assert.equal(loud.stdout, "");
+  assert.equal(loud.code, 0);
+});
