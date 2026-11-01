@@ -33,4 +33,8 @@ Preconditions:
 - `claude -p` 每次執行都會用到 token，大約要幾十秒。
 - `claude -p` 回覆後不會結束，會一直等背景 server（2026-11-01 實測 151 秒後仍在）。`ccv cleanup` 關閉 window 時，它和背景 server 會一起結束；cleanup 也會確認這兩個 PID。
 - `bg-open` 用到 `services-open` 的做法，那個功能目前未驗證。
-- 這個功能還沒實跑過。
+- 2026-11-01 實跑結果（run `20261101T132241-nvww`）：bg-row PASS、bg-lock PASS、bg-focus PASS；回歸 list、stop PASS。bg-open 未驗證：會在使用者的瀏覽器開分頁，這次沒有取得同意。
+- **跳轉按鈕不穩定，是既有問題，不限背景列。** 2026-11-01 共 7 次實跑、9 次點擊「跳轉」，只有 2 次切換了 workspace（分頁列 1 次、背景列 1 次）。點擊位置經截圖確認正確；用 CLI 直接送相同的 `surface.focus` 會切換。原因未查出。
+- bg-lock 的判定有限制：點擊沒有送達時，結果也是「服務沒停、agent 沒被打斷」。截圖可確認背景列顯示鎖頭。
+- `ccv bg-start` 有 1 次在 120 秒內沒有就緒（run `20261101T132024-ohdy`），三個條件都沒成立，原因未查出。之後 `bg-start` 逾時會把 agent 分頁的畫面存成 `bg-start-timeout.txt`。
+- 「多個 agent」「agent 沒有 surfaceId」時改用 `workspace.select` 的行為，只有單元測試，ccv 做不出這些情境。

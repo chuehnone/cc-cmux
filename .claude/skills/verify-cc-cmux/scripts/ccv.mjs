@@ -398,6 +398,7 @@ async function bgStart() {
     await sleep(2000);
   }
   log(state, "bg-start timeout missing=" + missing.join(","));
+  writeFileSync(join(state.evidenceDir, "bg-start-timeout.txt"), now() + "\nmissing=" + missing.join(",") + "\n\n" + (cmuxTry("read-screen", "--workspace", state.bg.workspace, "--lines", "40") || "(read-screen 失敗)") + "\n");
   fail("120 秒內背景服務沒有就緒，缺：" + missing.join("、") + "。請執行 cleanup 後再試。");
 }
 
