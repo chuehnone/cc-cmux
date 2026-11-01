@@ -125,3 +125,12 @@ test("沒有 agent 時，背景列跳轉改切 workspace", () => {
 test("唯一的 agent 沒有 surfaceId 時，背景列跳轉改切 workspace", () => {
   assert.deepEqual(focusCalls([{ id: "a1" }]), selectWorkspace);
 });
+
+test("背景列的停止按鈕是鎖頭，點了不送 cmux 呼叫，只寫 log", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [], [{ surfaceId: "s9" }])] });
+  const row = s.rows()[0];
+  assert.ok(row.buttons.some((b) => b.symbol === "lock"));
+  const calls = s.tap(9000, "lock");
+  assert.equal(calls.filter((c) => c.fn === "cmux").length, 0);
+  assert.equal(calls.filter((c) => c.fn === "log").length, 1);
+});

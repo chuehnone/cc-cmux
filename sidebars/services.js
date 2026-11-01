@@ -27,6 +27,7 @@ const rows = () => {
         workspaceTitle: w.title,
         tabTitle: "背景",
         surfaceId: soleAgentSurface,
+        hasAgent: true,
         background: true,
       });
     }
