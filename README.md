@@ -12,6 +12,12 @@ cmux 的自訂設定。
 
 分頁裡有 coding agent 時，面板不送 Ctrl+C。理由：Ctrl+C 會中斷 agent，不一定會停掉服務。這種列的圓點是橘色。
 
+coding agent 用背景 shell 啟動、有開 port 的服務，也會列出來。這種列的副標是「workspace 名稱 · 背景」，圓點是藍色：
+
+- 開啟：同上。
+- 跳轉：workspace 只有一個 agent 時，切到那個 agent 的分頁；否則切到該 workspace。
+- 停止：顯示鎖頭，不送 Ctrl+C。理由：背景服務沒有自己的分頁，送 Ctrl+C 會中斷 agent，停不掉背景行程。
+
 ### 安裝
 
 cmux 只從 `~/.config/cmux/sidebars/` 讀 sidebar。照這個順序做：
@@ -44,7 +50,10 @@ cmux 只從 `~/.config/cmux/sidebars/` 讀 sidebar。照這個順序做：
 
 ### 已知限制
 
-- 面板只列出在 cmux 分頁中啟動的服務。
+- 面板只列出有開 port 的服務。背景執行但沒有開 port 的 shell（例如 build、test）不會出現。
+- 背景服務只有在 cmux 把啟動它的程式記錄成 agent 時才會出現。
+- 面板看不出背景服務是哪個 agent 啟動的。
+- 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
 
 ## 維護
