@@ -63,7 +63,17 @@ git config core.hooksPath .githooks
 
 要說明程式的用途或理由時，寫進 README。
 
-手動檢查全部檔案：
+執行單元測試：
+
+```sh
+node --test tests/*.test.mjs
+```
+
+`tests/harness.mjs` 用 Node 的 vm 模擬 cmux 的 sidebar 執行環境。單元測試通過，不代表在 cmux 裡能跑，要再用 `.claude/skills/verify-cc-cmux` 實跑。
+
+開發流程用三個 skill：`plan-cc-cmux` 規劃並產出 `specs/<功能>.md`，`implement-cc-cmux` 照 spec 用 TDD 實作，`verify-cc-cmux` 實際操作面板驗證。
+
+手動檢查全部檔案沒有註解：
 
 ```sh
 node scripts/check-no-comments.mjs
