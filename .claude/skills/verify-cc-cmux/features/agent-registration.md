@@ -20,6 +20,7 @@ Preconditions:
 - `ccv launch` 回報 `READY`，`ccv doctor` 全部 `OK`。
 - 用 `ccv bg-start --count 2` 與 `ccv bg-start --with-hook --count 2`。capture 的 `bg each port` 一節列出每個 port 的 `inSidebarStatePorts` 與 `panelRow`。
 - 不改使用者的 `~/.claude/settings.json`。hook 只透過測試資料夾的專案層 `.claude/settings.json` 生效。
+- `reg-both`、`reg-cleanup` 進行時，cmux 必須是前景 app。`actions.log` 每行的 `front=` 與 capture 的 `## front app` 要是 `cmux`。不是時，結果不算數，請使用者切到 cmux 後重跑。
 
 - **對照組（`reg-control`）。** 執行 `ccv bg-start --count 2`。兩個背景 server 都在 LISTEN 後，執行 `ccv capture reg-control`。`sidebar-state` 的 `ports=` 不會同時有兩個背景 port。記下 `status_count`。執行 `ccv cleanup`。
 - **兩個都在（`reg-both`）。** 重新 `ccv launch`，執行 `ccv bg-start --with-hook --count 2`。`cmux top` 的 tag 有兩個 `cc-cmux.claude.<PID>`。之後 30 秒內每 5 秒執行一次 `ccv capture`：每一次 `ports=` 都有兩個背景 port，面板 AX 樹也都有兩列 `:<port>`。
@@ -30,6 +31,8 @@ Preconditions:
 ## Gotchas
 
 - 這個功能依賴 cmux 沒有公開文件的 `set_agent_pid`。cmux 改版後若失效，`reg-both` 會失敗，不要放寬條件。
-- 對照組 2026-11-01 實測是兩個背景 port 都不在（`ports=none`），原因未查出。判定只看「不會兩個同時在」。
+- cmux 不是前景 app 時，定期 agent 掃描會暫停，背景服務的 port 不會出現或不會移除。調查與證據見 `specs/agent-registration.md` 的「cmux 在背景時不更新」。
+- 對照組 2026-11-01 實測是兩個背景 port 都不在（`ports=none`）。判定只看「不會兩個同時在」。
 - `claude -p` 每次執行都會用到 token，`--count 2` 會用兩倍。
-- 這個功能還沒實跑過。
+- 2026-11-02 實跑（cmux 在前景，run `20261101T172324-59y6`）：reg-both PASS、reg-no-status PASS、reg-cleanup PASS（結束第 1 個 Claude 後約 6 秒移除，另一個仍在）。reg-control PASS（run `20261101T155742-wdk3`）。回歸 install、list、services-background、stop 在前景 PASS（run `20261101T173842-k16d`）。
+- 未驗證：cmux 在背景、agent 活著、只有 server 結束時，port 會不會一直留著。

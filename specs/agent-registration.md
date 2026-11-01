@@ -57,7 +57,7 @@
 
 實跑（verify-cc-cmux）：
 
-9. 同一個測試 workspace 啟動兩個帶 hook 的 `claude -p`，各用背景 Bash 啟動一個 server。兩個 port 在 30 秒內一直出現在 `sidebar-state` 的 `ports=`，面板上也各有一列 `:<port>`。對照組（不帶 hook）同樣條件下，兩個背景 port 不會同時出現在 `ports=`。
+9. cmux 在前景時，同一個測試 workspace 啟動兩個帶 hook 的 `claude -p`，各用背景 Bash 啟動一個 server。兩個 port 在 30 秒內一直出現在 `sidebar-state` 的 `ports=`，面板上也各有一列 `:<port>`。對照組（不帶 hook）同樣條件下，兩個背景 port 不會同時出現在 `ports=`。
 10. 帶 hook 時，`sidebar-state` 的 `status_count` 與對照組相同。
 11. 測試 Claude 與它的背景 server 結束後，15 秒內 port 從 `ports=` 消失。
 12. 回歸：install、list、stop、services-background 照舊通過。
@@ -115,9 +115,24 @@
 - 專案層 `.claude/settings.json` 的 `SessionStart`、`UserPromptSubmit` hook 都有執行。hook 的 `$PPID` 就是 Claude 的 PID，與 `CMUX_CLAUDE_PID` 相同。
 - cmux 自己的 hook 仍有效：`claude_code` tag 仍在。
 - 兩個 Claude 的 `CMUX_TAB_ID` 相同，屬於同一個 workspace。
-- 對照組：30 秒內 `ports=none`，兩個背景 port 都不在。`claude_code` 記的 PID 底下也有背景 server，但沒有被偵測到，原因未查出。規劃時預期「只有其中一個」，所以對照組的條件改成「兩個背景 port 不會同時出現」。
+- 對照組：30 秒內 `ports=none`，兩個背景 port 都不在。`claude_code` 記的 PID 底下也有背景 server，但沒有被偵測到。當時沒有記錄前景 app；推測原因是 cmux 在背景（見下方「cmux 在背景時不更新」）。規劃時預期「只有其中一個」，所以對照組的條件改成「兩個背景 port 不會同時出現」。
 - 手動用 `set_agent_pid cc-cmux.claude.<PID> <PID> --tab=<workspace>` 登記兩個 Claude 後，2 秒內 `ports=` 出現兩個背景 port，`status_count` 不變（1）。
 - 用 `&` 放到背景的那個 `claude -p` 與它的背景 server，在關閉測試 window 後仍存活。所以 ccv 的 cleanup 要記錄每一個 Claude 與 server 的 PID，並逐一結束。
+
+### cmux 在背景時不更新（2026-11-01 至 11-02 的調查）
+
+第一次正式驗證（run `20261101T155855-nkwq`）：hook 有登記兩個 `cc-cmux.claude.<PID>`，但 30 秒內 `ports=none`。調查過程排除了幾個假說，結論如下。
+
+- **原因：cmux 不是前景 app 時，定期 agent 掃描會暫停。** cmux v0.65.2.2 `AppDelegate.swift:2622`（`applicationWillResignActive`）暫停、`:2155`（`applicationDidBecomeActive`）恢復，`TerminalController.swift:1195` 啟動時依 `NSApplication.shared.isActive` 設定。本機 cmux 0.65.2 build 113 的 commit 是 `12023d89f`，即 v0.65.2.2。
+- 暫停時，登記改變會觸發一輪短掃描，實測約 5–7 秒。shell 執行指令也會觸發，這是讀原始碼的推論，未實測。server 在這段時間之後才 bind，就偵測不到。單一 key、`sh` 當 agent 的實測：bind 延遲 3、5 秒偵測到；7、9、12 秒偵測不到。那幾次 run 沒有記錄前景 app，事後查到前景是 Chrome。
+- 同一個 run 內的因果測試（run `20261101T172324-59y6`，每次讀取都記錄前景 app）：cmux 在背景時 bind，之後 13 次讀取都偵測不到；切到 cmux 後約 2.6 秒出現。
+- cmux 在前景時（同一個 run）：兩個帶 hook 的 Claude，30 次讀取都有兩個背景 port，面板兩列都在，`status_count` 與對照組相同。
+- 被排除的假說：只有登記當下的掃描有效（cmux 在前景時，定期掃描偵測到延遲 12 秒的 bind，run `20261101T171816-x068`）；本機 binary 與原始碼版本不同；cmux 的 Stop hook 會重新登記（v0.65.2.2 `CLI/cmux.swift:31379` 只在 `session-start` 登記 Claude）；掃描結果不完整被擋下（依另一個 session 讀原始碼的結果：不完整只延後移除，不擋新增；本 session 未核對）；登記順序造成版本號錯開（單一登記、延遲 10 秒也一樣偵測不到）。
+- 移除：結束被登記的 Claude 本身時，前景約 6 秒、背景約 4 秒移除 port。背景也很快的原因是推測：登記改變觸發了掃描，或 cmux 的 SessionEnd hook 清掉了 agent PID，都未查證。agent 還活著、只有 server 結束時，前景約 6 秒移除（run `20261101T173842-k16d`）；背景只觀察了約 5 秒，會不會一直留著**未驗證**。
+
+### 決策：不支援 cmux 在背景時即時更新
+
+使用者 2026-11-02 決定：cmux 在背景時不更新，切回 cmux 才更新。所以 hook 不加 `PostToolUse` 或延遲重送。這是使用者決定的已知限制，不是技術上做不到：cmux 放在第二個螢幕、但不是前景 app 時，面板也不會更新。
 
 ## 不做的事
 

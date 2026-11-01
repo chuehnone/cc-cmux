@@ -85,6 +85,7 @@ cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 work
 - 背景服務只有在 cmux 把啟動它的程式記錄成 agent 時才會出現。
 - 同一個 workspace 有多個 Claude Code session 時，沒裝上面的 hook，背景服務會時有時無。
 - 這個 hook 用的是 cmux 沒有公開文件的 socket 指令 `set_agent_pid`。cmux 改版後可能失效。
+- cmux 不是前景 app 時，背景服務不會更新：新的背景服務不出現，或結束的不消失。切回 cmux 後約 2–3 秒內更新。原因是 cmux 在背景時會暫停定期的 agent 掃描。cmux 放在第二個螢幕、但正在用別的 app 時，也是如此。
 - 面板看不出背景服務是哪個 agent 啟動的。
 - 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。

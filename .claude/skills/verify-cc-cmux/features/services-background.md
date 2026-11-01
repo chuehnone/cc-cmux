@@ -31,6 +31,7 @@ Preconditions:
 - 圖示按鈕不在 AX 樹裡。鎖頭是否顯示只能從截圖看，所以 `bg-lock` 用「點了之後服務沒停、agent 沒被打斷」來判定。
 - cmux 有時不移除已結束服務的 port（issue #1）。背景服務結束後，那一列可能留著。
 - `claude -p` 每次執行都會用到 token，大約要幾十秒。
+- cmux 不是前景 app 時，定期 agent 掃描會暫停，背景服務可能不出現。驗證時 cmux 要在前景（看 `actions.log` 的 `front=`）。2026-11-01 有一次回歸失敗（run `20261101T160157-bbz1`），2026-11-02 在前景重跑通過（run `20261101T173842-k16d`）。
 - `claude -p` 回覆後不會結束，會一直等背景 server（2026-11-01 實測 151 秒後仍在）。`ccv cleanup` 關閉 window 時，它和背景 server 會一起結束；cleanup 也會確認這兩個 PID。
 - `bg-open` 用到 `services-open` 的做法，那個功能目前未驗證。
 - 2026-11-01 實跑結果（run `20261101T132241-nvww`）：bg-row PASS、bg-lock PASS、bg-focus PASS；回歸 list、stop PASS。bg-open 未驗證：會在使用者的瀏覽器開分頁，這次沒有取得同意。
