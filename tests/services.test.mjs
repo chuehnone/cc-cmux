@@ -100,3 +100,10 @@ test("workspace 沒有 ports 欄位時不出錯，也沒有背景列", () => {
   const s = loadSidebar("services", { workspaces: [{ id: "w1", title: "api", tabs: [tab("t1", "server", "s1", [8080])] }] });
   assert.deepEqual(s.rows().map((r) => r.port), [8080]);
 });
+
+test("只有一個帶 surfaceId 的 agent 時，背景列跳轉到它的分頁", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [tab("t9", "claude", "s9", [])], [{ surfaceId: "s9" }])] });
+  assert.deepEqual(s.tap(9000, "arrow.right.square"), [
+    { fn: "cmux", method: "surface.focus", params: { surface_id: "s9", workspace_id: "w1" } },
+  ]);
+});

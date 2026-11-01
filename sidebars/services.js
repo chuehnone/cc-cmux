@@ -16,6 +16,8 @@ const rows = () => {
       }
     }
     const tabPorts = new Set((w.tabs ?? []).flatMap((t) => t.ports ?? []));
+    const agents = w.agents ?? [];
+    const soleAgentSurface = agents.length === 1 ? agents[0].surfaceId : undefined;
     for (const p of w.ports ?? []) {
       if (tabPorts.has(p)) continue;
       out.push({
@@ -24,6 +26,7 @@ const rows = () => {
         workspaceId: w.id,
         workspaceTitle: w.title,
         tabTitle: "背景",
+        surfaceId: soleAgentSurface,
         background: true,
       });
     }
