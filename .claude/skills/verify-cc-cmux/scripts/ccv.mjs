@@ -289,6 +289,21 @@ function capture(label) {
   sec("sidebar-state ports", sidebarState === null ? "(cmux sidebar-state 查詢失敗)" : sidebarState.split("\n").filter((l) => l.startsWith("ports=")).join("\n") || "(沒有 ports 欄位)");
   const { row } = window_row_safe(state);
   sec("panel row :" + state.port, row ? "present " + JSON.stringify(row.frame) : "absent");
+  sec("status_count", ((cmuxTry("sidebar-state", "--workspace", state.serverWorkspace) || "").match(/^status_count=.*$/m) || ["(無)"])[0]);
+  if (state.bg?.ports) {
+    const bgState = cmuxTry("sidebar-state", "--workspace", state.bg.workspace) || "";
+    const portsLine = (bgState.match(/^ports=.*$/m) || ["(無)"])[0];
+    sec("bg workspace ports", portsLine);
+    sec("bg workspace status_count", (bgState.match(/^status_count=.*$/m) || ["(無)"])[0]);
+    sec("bg each port", state.bg.ports.map((p) => {
+      const listen = listenerPid(p);
+      const inPorts = new RegExp("\\b" + p + "\\b").test(portsLine.replace(/^ports=/, ""));
+      const row = window_row_safe(state, p).row;
+      return ":" + p + " listen=" + (listen || "none") + " inSidebarStatePorts=" + inPorts + " panelRow=" + (row ? "present" : "absent");
+    }).join("\n"));
+    const top = (cmuxTry("top", "--all", "--processes", "--flat", "--format", "tsv") || "").split("\n").map((l) => l.split("\t"));
+    sec("bg workspace agent tags", top.filter((r) => r[3] === "tag" && r[5] === state.bg.workspace).map((r) => r[4].replace(/^.*:tag:/, "") + " pids=" + top.filter((x) => x[5] === r[4]).map((x) => x[4]).join(",")).join("\n"));
+  }
   if (state.bg?.port) {
     const bgPid = listenerPid(state.bg.port);
     sec("bg lsof port " + state.bg.port, sh("lsof", ["-nP", "-iTCP:" + state.bg.port, "-sTCP:LISTEN"], { allowFail: true }));
@@ -358,16 +373,85 @@ async function checkStop() {
   process.exit(effectAt !== null && panelAt !== null ? 0 : 1);
 }
 
-async function bgStart() {
+function claudeAncestor(pid) {
+  return ancestors(pid).slice(1).find((a) => /(^|\/)claude$/.test(sh("ps", ["-o", "comm=", "-p", String(a)], { allowFail: true }) || "")) || null;
+}
+
+async function bgStartMulti(state, { withHook, count }) {
+  const ports = [];
+  for (let p = 18750; p <= PORT_RANGE[1] && ports.length < count; p++) {
+    if (await portFree(p)) ports.push(p);
+  }
+  if (ports.length < count) fail("18750-18799 沒有足夠的空 port");
+  if (withHook) {
+    mkdirSync(join(state.dataDir, ".claude"), { recursive: true });
+    const hook = { type: "command", command: "node " + JSON.stringify(join(REPO, "hooks", "register-agent.mjs")) };
+    writeFileSync(join(state.dataDir, ".claude", "settings.json"), JSON.stringify({ hooks: { SessionStart: [{ hooks: [hook] }], UserPromptSubmit: [{ hooks: [hook] }] } }, null, 2) + "\n");
+  }
+  const claudeCmd = (port) => "claude -p \"Use the Bash tool with run_in_background set to true to run exactly this command, with nothing added: 'python3 -I -m http.server " + port + " --bind 127.0.0.1 --directory " + state.dataDir + "' and then reply DONE\" --model haiku --allowedTools 'Bash(python3 -I -m http.server:*)'";
+  const command = "cd " + state.dataDir + " && " + ports.slice(0, -1).map((p) => "{ " + claudeCmd(p) + " & } ; ").join("") + claudeCmd(ports[ports.length - 1]);
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-bg-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.bg = { workspace: ws[1], port: ports[0], ports, withHook, startedAt: Date.now() };
+  saveState(state);
+  log(state, "bg-start multi workspace=" + ws[1] + " ports=" + ports.join(",") + " withHook=" + withHook + " command=" + command);
+  const t0 = Date.now();
+  let missing = [];
+  while (Date.now() - t0 < 150000) {
+    const found = ports.map((port) => {
+      const pid = listenerPid(port);
+      const tty = pid ? sh("ps", ["-o", "tty=", "-p", String(pid)], { allowFail: true }) : null;
+      return { port, pid, tty, claude: pid ? claudeAncestor(pid) : null };
+    });
+    missing = found.flatMap((f) => [!f.pid && "port " + f.port + " LISTEN", f.pid && !f.claude && "port " + f.port + " 的 server 是 claude 的子孫", f.pid && f.tty !== "??" && "port " + f.port + " 的 server 沒有 tty"]).filter(Boolean);
+    if (missing.length === 0) {
+      const lines = workspaceTree(state).split("\n");
+      const start = lines.findIndex((l) => l.includes(state.bg.workspace + " "));
+      const surf = lines.slice(start + 1).map((l) => l.match(/surface (surface:\d+)/)).find(Boolean);
+      state.bg = { ...state.bg, agentPid: found[0].claude, serverPid: found[0].pid, agentPids: found.map((f) => f.claude), serverPids: found.map((f) => f.pid), surface: surf ? surf[1] : null };
+      saveState(state);
+      const desc = found.map((f) => f.port + ":claude=" + f.claude + ",server=" + f.pid).join(" ");
+      log(state, "bg ready multi " + desc + " after=" + (Date.now() - t0) + "ms");
+      console.log("BG READY " + desc);
+      return;
+    }
+    await sleep(2000);
+  }
+  log(state, "bg-start timeout missing=" + missing.join(","));
+  writeFileSync(join(state.evidenceDir, "bg-start-timeout.txt"), now() + "\nmissing=" + missing.join(",") + "\n\n" + (cmuxTry("read-screen", "--workspace", state.bg.workspace, "--lines", "40") || "(read-screen 失敗)") + "\n");
+  fail("150 秒內背景服務沒有就緒，缺：" + missing.join("、") + "。請執行 cleanup 後再試。");
+}
+
+async function bgKill(index) {
+  const state = loadState();
+  const i = Number(index) - 1;
+  const agent = state.bg?.agentPids?.[i];
+  const server = state.bg?.serverPids?.[i];
+  if (!agent || !server) fail("用法：ccv.mjs bg-kill <編號>，編號對應 bg-start 的 port 順序，從 1 開始");
+  for (const pid of [server, agent]) {
+    if (sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true })) process.kill(pid, "SIGTERM");
+  }
+  state.bg.killed = [...(state.bg.killed || []), { index: i + 1, port: state.bg.ports[i], agent, server, at: Date.now() }];
+  saveState(state);
+  log(state, "bg-kill " + (i + 1) + " port=" + state.bg.ports[i] + " agent=" + agent + " server=" + server);
+  console.log("BG KILLED port=" + state.bg.ports[i] + " agent=" + agent + " server=" + server);
+}
+
+async function bgStart(args = []) {
   const state = loadState();
   if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
   if (state.bg) fail("這個 run 已經有背景服務：port " + state.bg.port);
+  const withHook = args.includes("--with-hook");
+  const ci = args.indexOf("--count");
+  const count = ci >= 0 ? Number(args[ci + 1]) : 1;
+  if (!(count >= 1 && count <= 4)) fail("--count 要是 1 到 4");
+  if (withHook || count > 1) return bgStartMulti(state, { withHook, count });
   let port = null;
   for (let p = 18750; p <= PORT_RANGE[1]; p++) {
     if (await portFree(p)) { port = p; break; }
   }
   if (!port) fail("18750-18799 沒有空的 port");
-  const prompt = "Use the Bash tool with run_in_background set to true to run exactly: python3 -I -m http.server " + port + " --bind 127.0.0.1 --directory " + state.dataDir + " . Then reply DONE.";
+  const prompt = "Use the Bash tool with run_in_background set to true to run exactly this command, with nothing added: 'python3 -I -m http.server " + port + " --bind 127.0.0.1 --directory " + state.dataDir + "' and then reply DONE";
   const command = "claude -p \"" + prompt + "\" --model haiku --allowedTools 'Bash(python3 -I -m http.server:*)'";
   const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-bg-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
   if (!ws) fail("new-workspace 沒回傳 workspace ref");
@@ -416,7 +500,8 @@ async function cleanup(runId) {
     process.kill(state.serverPid, "SIGTERM");
     lines.push("SIGTERM " + state.serverPid + "（這個 run 啟動的 server）");
   }
-  for (const [name, pid] of [["agent", state.bg?.agentPid], ["bg server", state.bg?.serverPid]]) {
+  const bgPids = [...(state.bg?.serverPids || [state.bg?.serverPid]).map((p) => ["bg server", p]), ...(state.bg?.agentPids || [state.bg?.agentPid]).map((p) => ["agent", p])];
+  for (const [name, pid] of bgPids) {
     if (!pid) continue;
     for (let i = 0; i < 20 && sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true }); i++) await sleep(250);
     if (sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true })) {
@@ -438,9 +523,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": bgStart, capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start|capture <label>|wait-row <present|absent>|check-stop|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|cleanup [run]>");
   process.exit(2);
 }
 try {
