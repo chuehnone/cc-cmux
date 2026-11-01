@@ -30,3 +30,7 @@ test("沒有 CMUX_TAB_ID 時不送", () => {
 test("有 CMUX_CLAUDE_PID 時，key 與 PID 都用它", () => {
   assert.equal(buildPayload({ ...cmuxEnv, CMUX_CLAUDE_PID: "777" }, 4242), "set_agent_pid cc-cmux.claude.777 777 --tab=T1");
 });
+
+test("有 CMUX_SOCKET_CAPABILITY 時，前面加上 _cmux_capability_v1", () => {
+  assert.equal(buildPayload({ ...cmuxEnv, CMUX_SOCKET_CAPABILITY: "cap" }, 4242), "_cmux_capability_v1 cap set_agent_pid cc-cmux.claude.4242 4242 --tab=T1");
+});
