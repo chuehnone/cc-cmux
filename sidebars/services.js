@@ -23,6 +23,7 @@ const rows = () => {
         port: p,
         workspaceId: w.id,
         workspaceTitle: w.title,
+        tabTitle: "背景",
         background: true,
       });
     }
@@ -50,7 +51,7 @@ sidebar(() =>
       { items: rows, key: (r) => r.key },
       (r) =>
         HStack({ spacing: 6 }, [
-          Circle({ size: 6 }).fill(() => (r().hasAgent ? "#FF9F0A" : "#34C759")),
+          Circle({ size: 6 }).fill(() => (r().background ? "#0A84FF" : r().hasAgent ? "#FF9F0A" : "#34C759")),
           VStack({ spacing: 1, alignment: "leading" }, [
             Text(() => ":" + r().port).font(12).monospaced().weight("semibold"),
             Text(() => r().workspaceTitle + " · " + r().tabTitle)

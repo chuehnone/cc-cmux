@@ -69,3 +69,10 @@ test("workspace 有、分頁沒有的 port 出現一列", () => {
   const s = loadSidebar("services", { workspaces: [bgWs([8080, 9000], [tab("t1", "server", "s1", [8080])])] });
   assert.deepEqual(s.rows().map((r) => r.port), [8080, 9000]);
 });
+
+test("背景列的副標是 workspace 名稱 · 背景，圓點是藍色", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([8080, 9000], [tab("t1", "server", "s1", [8080])])] });
+  const row = s.rows().find((r) => r.port === 9000);
+  assert.ok(row.texts.includes("api · 背景"));
+  assert.equal(row.dot, "#0A84FF");
+});
