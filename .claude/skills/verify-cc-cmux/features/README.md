@@ -47,3 +47,4 @@
 | 跳到服務的分頁 | [services-focus.md](./services-focus.md) | 未實跑 |
 | 用瀏覽器開啟服務 | [services-open.md](./services-open.md) | 未實跑 |
 | 列出背景服務 | [services-background.md](./services-background.md) | 已實跑：bg-row、bg-lock PASS；bg-focus 不穩定；bg-open 未驗證 |
+| 登記每一個 Claude Code session | [agent-registration.md](./agent-registration.md) | 未實跑（規劃完成，尚未實作） |
