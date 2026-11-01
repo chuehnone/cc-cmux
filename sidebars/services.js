@@ -63,7 +63,9 @@ sidebar(() =>
           Spacer(),
           iconButton("safari", "secondary", () => openURL("http://localhost:" + r().port)),
           iconButton("arrow.right.square", "secondary", () =>
-            cmux("surface.focus", { surface_id: r().surfaceId, workspace_id: r().workspaceId })),
+            r().background && !r().surfaceId
+              ? cmux("workspace.select", { workspace_id: r().workspaceId })
+              : cmux("surface.focus", { surface_id: r().surfaceId, workspace_id: r().workspaceId })),
           iconButton(
             () => (r().hasAgent ? "lock" : "stop.circle"),
             () => (r().hasAgent ? "tertiary" : "#FF453A"),

@@ -107,3 +107,21 @@ test("只有一個帶 surfaceId 的 agent 時，背景列跳轉到它的分頁",
     { fn: "cmux", method: "surface.focus", params: { surface_id: "s9", workspace_id: "w1" } },
   ]);
 });
+
+const focusCalls = (agents) => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [], agents)] });
+  return s.tap(9000, "arrow.right.square");
+};
+const selectWorkspace = [{ fn: "cmux", method: "workspace.select", params: { workspace_id: "w1" } }];
+
+test("有多個 agent 時，背景列跳轉改切 workspace", () => {
+  assert.deepEqual(focusCalls([{ surfaceId: "s8" }, { surfaceId: "s9" }]), selectWorkspace);
+});
+
+test("沒有 agent 時，背景列跳轉改切 workspace", () => {
+  assert.deepEqual(focusCalls(undefined), selectWorkspace);
+});
+
+test("唯一的 agent 沒有 surfaceId 時，背景列跳轉改切 workspace", () => {
+  assert.deepEqual(focusCalls([{ id: "a1" }]), selectWorkspace);
+});
