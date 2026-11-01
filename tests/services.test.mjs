@@ -134,3 +134,8 @@ test("背景列的停止按鈕是鎖頭，點了不送 cmux 呼叫，只寫 log"
   assert.equal(calls.filter((c) => c.fn === "cmux").length, 0);
   assert.equal(calls.filter((c) => c.fn === "log").length, 1);
 });
+
+test("底部說明提到藍點代表背景服務", () => {
+  const s = loadSidebar("services", { workspaces: [] });
+  assert.ok(s.texts().some((t) => typeof t === "string" && t.includes("藍點") && t.includes("背景")));
+});

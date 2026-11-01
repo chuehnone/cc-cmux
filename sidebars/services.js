@@ -86,7 +86,7 @@ sidebar(() =>
     ),
     Text(() => (rows().length === 0 ? "沒有偵測到監聽中的 port" : ""))
       .font(11).color("tertiary").paddingHorizontal(10),
-    Text("只列出在 cmux 分頁中啟動的服務。橘點 = 分頁有 agent，不能從這裡停止。")
+    Text("綠點 = 分頁前景的服務。橘點 = 分頁有 agent，不能從這裡停止。藍點 = agent 背景啟動的服務，不能從這裡停止。")
       .font(10).color("tertiary").lineLimit(3).paddingHorizontal(10),
     Spacer(),
   ]).paddingHorizontal(6),
