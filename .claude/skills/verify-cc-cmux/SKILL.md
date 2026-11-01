@@ -124,6 +124,7 @@ ccv capture <label>
 - `launch.png`：就緒時的畫面。
 - `click-<button>-<epoch>.png`：點擊前的畫面。
 - `check-stop.txt`、`check-stop.png`：`ccv check-stop` 的結果與當下狀態。
+- 執行過 `ccv bg-start` 後，每份 `<label>.txt` 另外記錄背景服務：port 的 LISTEN 狀態、listener 的 tty、agent PID、`sidebar-state` 的 ports、面板列與副標、agent 分頁的畫面。
 - `cleanup.txt`：清理了什麼，以及 port 是否已釋放。
 
 證據標準：
@@ -156,8 +157,10 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 |------|------|
 | `ccv launch` | 開 window、啟動測試 server、顯示面板，並等待就緒 |
 | `ccv doctor [run]` | 唯讀檢查 |
-| `ccv click <open\|focus\|stop>` | 點面板上的按鈕 |
+| `ccv click <open\|focus\|stop> [bg]` | 點面板上的按鈕。加 `bg` 時點背景服務那一列 |
 | `ccv check-stop` | 停止後的兩項檢查，各自回報 PASS 或 FAIL |
+| `ccv bg-start` | 在本次 run 的 window 開一個 workspace，執行 `claude -p --model haiku`，請它用背景 Bash 啟動測試 server（port 18750–18799）。等到三件事成立才回報 `BG READY`：cmux 把它記錄成 agent、server 是它的子孫且沒有 tty、`sidebar-state` 有這個 port。最多等 120 秒，會用到 token |
+| `ccv click <open\|focus\|stop> bg` | 點背景服務那一列的按鈕 |
 | `ccv wait-row <present\|absent>` | 等面板的 `:<port>` 出現或消失 |
 | `ccv capture <label>` | 存截圖和狀態 |
 | `ccv cleanup [run]` | 收掉這個 run 開的東西，保留證據 |

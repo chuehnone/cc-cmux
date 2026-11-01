@@ -106,12 +106,39 @@ function cuaWindow(state) {
   return wins.find((w) => w.window_id === state.cuaWindowId) || null;
 }
 
-function findRow(state) {
+function findRow(state, port = state.port) {
   const ws = cua("get_window_state", { pid: state.appPid, window_id: state.cuaWindowId, include_screenshot: false });
   const els = ws.elements || [];
-  const row = els.find((e) => e.role === "AXStaticText" && e.label === ":" + state.port);
+  const i = els.findIndex((e) => e.role === "AXStaticText" && e.label === ":" + port);
+  const row = i >= 0 ? els[i] : null;
+  const subtitle = i >= 0 ? els.slice(i + 1).find((e) => e.role === "AXStaticText") || null : null;
   const title = els.find((e) => e.role === "AXStaticText" && e.label === "Services");
-  return { row, title };
+  return { row, title, subtitle };
+}
+
+function targetPort(state, target) {
+  if (!target) return state.port;
+  if (target === "bg") {
+    if (!state.bg?.port) fail("這個 run 沒有背景服務。先執行 ccv.mjs bg-start");
+    return state.bg.port;
+  }
+  fail("目標只能省略或寫 bg");
+}
+
+function ancestors(pid) {
+  const out = [];
+  let p = pid;
+  for (let i = 0; i < 20 && p && p > 1; i++) {
+    out.push(p);
+    p = Number(sh("ps", ["-o", "ppid=", "-p", String(p)], { allowFail: true }) || 0);
+  }
+  return out;
+}
+
+function agentPidsInWorkspace(workspaceRef) {
+  const rows = (cmuxTry("top", "--all", "--processes", "--flat", "--format", "tsv") || "").split("\n").map((l) => l.split("\t"));
+  const tags = rows.filter((r) => r[3] === "tag" && r[5] === workspaceRef && /:tag:claude_code$/.test(r[4])).map((r) => r[4]);
+  return rows.filter((r) => r[3] === "process" && tags.includes(r[5])).map((r) => Number(r[4]));
 }
 
 async function launch() {
@@ -209,24 +236,25 @@ function doctor(runId) {
   process.exit(checks.every((c) => c.ok) ? 0 : 1);
 }
 
-function window_row_safe(state) {
+function window_row_safe(state, port) {
   try {
-    return findRow(state);
+    return findRow(state, port);
   } catch {
     return { row: null, title: null };
   }
 }
 
-function click(button) {
+function click(button, target) {
   const state = loadState();
   if (!(button in BUTTON_OFFSET_FROM_RIGHT)) fail("按鈕只能是 open、focus、stop");
+  const port = targetPort(state, target);
   if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了，拒絕操作其他 window");
   cmux("focus-window", "--window", state.windowId);
   const shotFile = join(state.evidenceDir, "click-" + button + "-" + Date.now() + ".png");
   const shotWidth = Number(cmux("shot", "--window", state.windowId, "--out", shotFile).split("x")[0]);
   const w = cuaWindow(state);
-  const { row } = findRow(state);
-  if (!w || !row) fail("面板沒有 :" + state.port + " 這一列");
+  const { row } = findRow(state, port);
+  if (!w || !row) fail("面板沒有 :" + port + " 這一列");
   const scale = shotWidth / w.bounds.width;
   if (!(scale >= 1 && scale <= 3) || w.bounds.height < 200) {
     log(state, "click " + button + " refused shotWidth=" + shotWidth + " bounds=" + JSON.stringify(w.bounds));
@@ -237,9 +265,9 @@ function click(button) {
   const x = Math.round((xPt - w.bounds.x) * scale);
   const y = Math.round((yPt - w.bounds.y) * scale);
   const result = cua("click", { pid: state.appPid, window_id: state.cuaWindowId, x, y, delivery_mode: "foreground" });
-  state.lastClick = { button, at: Date.now() };
+  state.lastClick = { button, target: target || "server", port, at: Date.now() };
   saveState(state);
-  log(state, "click " + button + " port=" + state.port + " shotWidth=" + shotWidth + " boundsWidth=" + w.bounds.width + " scale=" + scale + " bounds=" + JSON.stringify(w.bounds) + " row=" + JSON.stringify(row.frame) + " px=" + x + "," + y + " result=" + JSON.stringify(result) + " preshot=" + shotFile);
+  log(state, "click " + button + " port=" + port + " shotWidth=" + shotWidth + " boundsWidth=" + w.bounds.width + " scale=" + scale + " bounds=" + JSON.stringify(w.bounds) + " row=" + JSON.stringify(row.frame) + " px=" + x + "," + y + " result=" + JSON.stringify(result) + " preshot=" + shotFile);
   console.log("CLICKED " + button + " scale=" + scale + " px=" + x + "," + y + " " + JSON.stringify(result));
 }
 
@@ -261,6 +289,18 @@ function capture(label) {
   sec("sidebar-state ports", sidebarState === null ? "(cmux sidebar-state 查詢失敗)" : sidebarState.split("\n").filter((l) => l.startsWith("ports=")).join("\n") || "(沒有 ports 欄位)");
   const { row } = window_row_safe(state);
   sec("panel row :" + state.port, row ? "present " + JSON.stringify(row.frame) : "absent");
+  if (state.bg?.port) {
+    const bgPid = listenerPid(state.bg.port);
+    sec("bg lsof port " + state.bg.port, sh("lsof", ["-nP", "-iTCP:" + state.bg.port, "-sTCP:LISTEN"], { allowFail: true }));
+    sec("bg listener tty", bgPid ? sh("ps", ["-o", "pid=,ppid=,tty=", "-p", String(bgPid)], { allowFail: true }) : null);
+    sec("bg agent pid " + state.bg.agentPid, sh("ps", ["-o", "pid=,tty=,comm=", "-p", String(state.bg.agentPid)], { allowFail: true }));
+    const bgState = cmuxTry("sidebar-state", "--workspace", state.bg.workspace);
+    sec("bg sidebar-state ports", bgState === null ? "(cmux sidebar-state 查詢失敗)" : bgState.split("\n").filter((l) => l.startsWith("ports=")).join("\n") || "(沒有 ports 欄位)");
+    const bgRow = window_row_safe(state, state.bg.port);
+    sec("bg panel row :" + state.bg.port, bgRow.row ? "present " + JSON.stringify(bgRow.row.frame) : "absent");
+    sec("bg panel subtitle", bgRow.subtitle ? bgRow.subtitle.label : "(無)");
+    sec("bg agent surface screen", state.bg.surface ? cmuxTry("read-screen", "--workspace", state.bg.workspace, "--surface", state.bg.surface, "--lines", "15") : null);
+  }
   sec("list-windows", cmuxTry("list-windows"));
   sec("tree (this run's window)", workspaceTree(state));
   sec("server surface screen", state.serverSurface ? cmuxTry("read-screen", "--workspace", state.serverWorkspace, "--surface", state.serverSurface, "--lines", "15") : null);
@@ -318,6 +358,49 @@ async function checkStop() {
   process.exit(effectAt !== null && panelAt !== null ? 0 : 1);
 }
 
+async function bgStart() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  if (state.bg) fail("這個 run 已經有背景服務：port " + state.bg.port);
+  let port = null;
+  for (let p = 18750; p <= PORT_RANGE[1]; p++) {
+    if (await portFree(p)) { port = p; break; }
+  }
+  if (!port) fail("18750-18799 沒有空的 port");
+  const prompt = "Use the Bash tool with run_in_background set to true to run exactly: python3 -I -m http.server " + port + " --bind 127.0.0.1 --directory " + state.dataDir + " . Then reply DONE.";
+  const command = "claude -p \"" + prompt + "\" --model haiku --allowedTools 'Bash(python3 -I -m http.server:*)'";
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-bg-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.bg = { workspace: ws[1], port, startedAt: Date.now() };
+  saveState(state);
+  log(state, "bg-start workspace=" + ws[1] + " port=" + port + " command=" + command);
+  const t0 = Date.now();
+  let missing = [];
+  while (Date.now() - t0 < 120000) {
+    const agents = agentPidsInWorkspace(state.bg.workspace);
+    const pid = listenerPid(port);
+    const chain = pid ? ancestors(pid) : [];
+    const agentPid = agents.find((a) => chain.includes(a)) || null;
+    const tty = pid ? sh("ps", ["-o", "tty=", "-p", String(pid)], { allowFail: true }) : null;
+    const ports = cmuxTry("sidebar-state", "--workspace", state.bg.workspace) || "";
+    const detected = new RegExp("^ports=.*\\b" + port + "\\b", "m").test(ports);
+    missing = [agents.length === 0 && "cmux 記錄的 agent", !pid && "port LISTEN", pid && !agentPid && "server 是 agent 的子孫", pid && tty !== "??" && "server 沒有 tty", !detected && "sidebar-state 偵測到 port"].filter(Boolean);
+    if (missing.length === 0) {
+      const lines = workspaceTree(state).split("\n");
+      const start = lines.findIndex((l) => l.includes(state.bg.workspace + " "));
+      const surf = lines.slice(start + 1).map((l) => l.match(/surface (surface:\d+)/)).find(Boolean);
+      state.bg = { ...state.bg, agentPid, serverPid: pid, surface: surf ? surf[1] : null };
+      saveState(state);
+      log(state, "bg ready port=" + port + " agentPid=" + agentPid + " serverPid=" + pid + " after=" + (Date.now() - t0) + "ms");
+      console.log("BG READY port=" + port + " agentPid=" + agentPid + " serverPid=" + pid);
+      return;
+    }
+    await sleep(2000);
+  }
+  log(state, "bg-start timeout missing=" + missing.join(","));
+  fail("120 秒內背景服務沒有就緒，缺：" + missing.join("、") + "。請執行 cleanup 後再試。");
+}
+
 async function cleanup(runId) {
   const state = loadState(runId);
   const lines = [];
@@ -332,6 +415,16 @@ async function cleanup(runId) {
     process.kill(state.serverPid, "SIGTERM");
     lines.push("SIGTERM " + state.serverPid + "（這個 run 啟動的 server）");
   }
+  for (const [name, pid] of [["agent", state.bg?.agentPid], ["bg server", state.bg?.serverPid]]) {
+    if (!pid) continue;
+    for (let i = 0; i < 20 && sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true }); i++) await sleep(250);
+    if (sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true })) {
+      process.kill(pid, "SIGTERM");
+      lines.push("SIGTERM " + pid + "（這個 run 啟動的 " + name + "）");
+    } else {
+      lines.push(name + " " + pid + " 已結束");
+    }
+  }
   if (state.dataDir && state.dataDir.startsWith(tmpdir()) && existsSync(state.dataDir)) {
     rmSync(state.dataDir, { recursive: true });
     lines.push("rm " + state.dataDir);
@@ -344,9 +437,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": bgStart, capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop>|capture <label>|wait-row <present|absent>|check-stop|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start|capture <label>|wait-row <present|absent>|check-stop|cleanup [run]>");
   process.exit(2);
 }
 try {
