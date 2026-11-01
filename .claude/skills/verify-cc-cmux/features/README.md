@@ -46,3 +46,4 @@
 | 停止服務 | [services-stop.md](./services-stop.md) | 已實跑，結果見該檔 |
 | 跳到服務的分頁 | [services-focus.md](./services-focus.md) | 未實跑 |
 | 用瀏覽器開啟服務 | [services-open.md](./services-open.md) | 未實跑 |
+| 列出背景服務 | [services-background.md](./services-background.md) | 未實跑（規劃完成，尚未實作） |
