@@ -70,7 +70,8 @@ coding agent（例如 Claude Code）用背景 Bash 啟動的服務，沒有自�
 | `tests/services.test.mjs` | 新增成功條件 1–9 的測試 |
 | `README.md` | 更新 Services 的功能說明與已知限制 |
 | `.claude/skills/verify-cc-cmux/scripts/ccv.mjs` | 新增在測試 workspace 產生 agent 背景服務的能力 |
-| `.claude/skills/verify-cc-cmux/features/services-background.md`、`features/README.md` | 規劃時已寫好；實作時只更新實跑狀態與 Gotchas |
+| `.claude/skills/verify-cc-cmux/SKILL.md` | 記錄 ccv 新增的指令（實作時追加，見「實作中的更新」） |
+| `.claude/skills/verify-cc-cmux/features/services-background.md`、`features/README.md` | 規劃時已寫好；實作時更新實跑狀態、Gotchas，並把 Drive 的指令換成 ccv 實際的指令名稱 |
 
 不改的檔案與理由：
 
@@ -103,9 +104,19 @@ coding agent（例如 Claude Code）用背景 Bash 啟動的服務，沒有自�
 
 - 在測試 workspace 啟動 `claude -p`，用固定的 prompt 請它用背景 Bash 啟動測試 server，並記錄 port。
 - 先驗證：在 cmux 分頁裡執行的 `claude -p`，會不會被 cmux 記錄成 agent（`cmux top --all --processes` 的 claude_code tag 底下有它的 PID），而且它背景 Bash 啟動的 port 會出現在 `sidebar-state` 的 `ports=`。這一點目前未查證。驗證不通過時，停下來回報使用者，不要改用其他方式。
-- `claude -p` 做完 prompt 就會結束。結束後，背景 server 可能被一起結束，或變成孤兒行程而不再是 agent 的子孫，port 就會從 workspace 層的 `ports` 消失。所以 prompt 要請它啟動 server 後先等待一段固定時間再結束，讓驗證在它還活著時完成。這一點也要在實作第 2 步先驗證。
 - cleanup 要能結束這個 run 啟動的 `claude -p` 與它的背景 server。不依名稱 kill，只結束記錄下來的 PID。
 - capture 要記錄背景列的副標文字。
+
+## 實作中的更新
+
+2026-11-01 實作第 2 步的實驗結果（測試 window 裡執行 `claude -p --model haiku`，只允許 `http.server` 與 `sleep`）：
+
+- `claude -p` 會被 cmux 記錄成 agent：它的 PID 出現在 `cmux top` 的 claude_code tag 底下。
+- 它用背景 Bash 啟動的 server 沒有 tty，`sidebar-state` 的 `ports=` 有這個 port。從啟動到 port 出現約 48 秒。
+- 規劃時推測「`claude -p` 做完 prompt 就會結束」，實測不成立：回覆後仍在執行（151 秒後狀態是 `Waiting`），背景 server 持續 LISTEN。所以不需要請它等待。
+- 關閉測試 window 後，`claude -p` 與背景 server 都結束，沒有留下孤兒行程。
+- 第一次嘗試失敗：`--allowedTools` 接受多個值，放在它後面的 prompt 被當成工具名稱。prompt 要放在 `-p` 後面。
+- 因為 ccv 新增指令，`.claude/skills/verify-cc-cmux/SKILL.md` 加進改動範圍。
 
 ## 不做的事
 
