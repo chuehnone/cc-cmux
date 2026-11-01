@@ -35,7 +35,7 @@ Preconditions:
   - 點擊前不跑 capture、立刻點擊的 2 次都 PASS（約 6 秒）。單獨在點擊前執行 `cmux shot`、`sidebar-state`、`list-windows`、`tree`、`read-screen` 的各 1 次也都 PASS。
   - 依點擊時間排列（以 workspace 建立為起點）：9.1 秒、10.8 秒、12.9 秒、13.0 秒 PASS；12.0 秒一次 PASS、一次 FAIL。
   - FAIL 之後，對 server 分頁按 Enter，cmux 3 秒內就移除了 port。
-- **推測，未證實。** cmux 只在 shell 送 `ports_kick` 時掃描，每次 kick 會在 0.5、1.5、3、5、7.5、10 秒各掃一次。port 要連續 3 次掃不到才移除。zsh 回到 prompt 時會送 kick。推測：Ctrl+C 剛好落在指令啟動時那一輪掃描的尾段時，新的 kick 沒有觸發足夠的掃描。cmux 原始碼的註解說，這種情況會補跑一輪，但實測沒有。追蹤 issue：待建立。
+- **推測，未證實。** cmux 只在 shell 送 `ports_kick` 時掃描，每次 kick 會在 0.5、1.5、3、5、7.5、10 秒各掃一次。port 要連續 3 次掃不到才移除。zsh 回到 prompt 時會送 kick。推測：Ctrl+C 剛好落在指令啟動時那一輪掃描的尾段時，新的 kick 沒有觸發足夠的掃描。cmux 原始碼的註解說，這種情況會補跑一輪，但實測沒有。追蹤 issue：https://github.com/chuehnone/cc-cmux/issues/1
 - 不要在 `check-stop` 前後對 server 分頁按 Enter 來「修正」。那會繞過要驗證的使用者路徑。
 - 停止按鈕距離 window 右緣 34 pt，是從截圖量出來的。面板版面改了，就要重量。
 - 倍率每次點擊前重算：`cmux shot` 的寬度除以 cmux-cua 回報的 window 寬度。倍率不在 1 到 3 之間，或 window 高度小於 200 pt 時，`ccv click` 拒絕點擊。2026-11-01 修正後的 32 次點擊，都在 1 倍螢幕上（倍率 1）。2 倍螢幕在修正後還沒有重測。
