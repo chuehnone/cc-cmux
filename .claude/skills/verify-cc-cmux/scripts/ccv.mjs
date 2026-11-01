@@ -58,8 +58,16 @@ function saveState(state) {
   writeFileSync(join(state.evidenceDir, "state.json"), JSON.stringify(state, null, 2) + "\n");
 }
 
+function frontApp() {
+  const asn = sh("lsappinfo", ["front"], { allowFail: true });
+  if (!asn) return "unknown";
+  const info = sh("lsappinfo", ["info", "-only", "name", asn], { allowFail: true }) || "";
+  const m = info.match(/="(.*)"/);
+  return m ? m[1] : "unknown";
+}
+
 function log(state, line) {
-  appendFileSync(join(state.evidenceDir, "actions.log"), now() + " " + line + "\n");
+  appendFileSync(join(state.evidenceDir, "actions.log"), now() + " " + line + " front=" + frontApp() + "\n");
 }
 
 function portFree(port) {
@@ -233,6 +241,7 @@ function doctor(runId) {
   add("面板標題 Services 可見", !!title, "");
   add("面板有 :" + state.port + " 這一列", !!row, row ? JSON.stringify(row.frame) : "");
   for (const c of checks) console.log((c.ok ? "OK   " : "FAIL ") + c.name + (c.detail ? "  " + c.detail : ""));
+  console.log("INFO 前景 app  " + frontApp() + "（cmux 不在前景時，定期 agent 掃描會暫停）");
   process.exit(checks.every((c) => c.ok) ? 0 : 1);
 }
 
@@ -277,6 +286,7 @@ function capture(label) {
   const parts = [];
   const sec = (name, body) => parts.push("## " + name + "\n" + (body ?? "(無輸出)") + "\n");
   sec("time", now());
+  sec("front app", frontApp());
   if (windowExists(state.windowId)) {
     cmux("shot", "--window", state.windowId, "--out", join(state.evidenceDir, label + ".png"));
     sec("screenshot", label + ".png");

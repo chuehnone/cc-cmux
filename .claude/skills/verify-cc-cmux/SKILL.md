@@ -111,6 +111,8 @@ ccv capture <label>
 
 這個指令寫出 `<label>.png` 和 `<label>.txt`。`.txt` 包含：
 
+- 當下的前景 app（`## front app`）。
+
 - `lsof` 看到的 port LISTEN 狀態。
 - server 行程的 pid、tty 和指令。
 - `sidebar-state` 的 `ports=`。
@@ -120,7 +122,7 @@ ccv capture <label>
 
 其他檔案：
 
-- `actions.log`：每個操作的時間、指令和 cmux-cua 的回傳值。
+- `actions.log`：每個操作的時間、指令和 cmux-cua 的回傳值。每一行最後附上當下的前景 app（`front=`）。cmux 不在前景時，cmux 的定期 agent 掃描會暫停（cmux v0.65.2.2 `AppDelegate.swift:2622`），背景服務的 port 不會更新，判讀結果時要看這一欄。
 - `launch.png`：就緒時的畫面。
 - `click-<button>-<epoch>.png`：點擊前的畫面。
 - `check-stop.txt`、`check-stop.png`：`ccv check-stop` 的結果與當下狀態。
