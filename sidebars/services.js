@@ -1,12 +1,3 @@
-// services: 列出所有 workspace 中正在監聽的 port。
-//   開啟：用瀏覽器開 http://localhost:<port>
-//   跳轉：切到跑這個服務的分頁
-//   停止：對該分頁送 Ctrl+C
-// 分頁裡有 coding agent（例如 Claude）時，不提供「停止」。
-// 理由：Ctrl+C 會中斷 agent，不一定會停掉服務。
-//
-// 使用：cmux right-sidebar set custom services
-
 const rows = () => {
   const out = [];
   for (const w of data.workspaces() ?? []) {

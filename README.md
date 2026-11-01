@@ -46,3 +46,25 @@ cmux 只從 `~/.config/cmux/sidebars/` 讀 sidebar。照這個順序做：
 
 - 面板只列出在 cmux 分頁中啟動的服務。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
+
+## 維護
+
+Clone 後安裝 git hook：
+
+```sh
+git config core.hooksPath .githooks
+```
+
+規則由這些機制檢查：
+
+| 規則 | 由誰檢查 |
+|------|----------|
+| 程式（`.js` `.mjs` `.cjs` `.ts`）不要有註解 | `.githooks/pre-commit` 執行 `scripts/check-no-comments.mjs --staged` |
+
+要說明程式的用途或理由時，寫進 README。
+
+手動檢查全部檔案：
+
+```sh
+node scripts/check-no-comments.mjs
+```
