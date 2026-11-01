@@ -17,3 +17,7 @@ test("沒有 CMUX_SURFACE_ID 時不送", () => {
   const { CMUX_SURFACE_ID, ...env } = cmuxEnv;
   assert.equal(buildPayload(env, 4242), null);
 });
+
+test("CMUX_CLAUDE_HOOKS_DISABLED=1 時不送", () => {
+  assert.equal(buildPayload({ ...cmuxEnv, CMUX_CLAUDE_HOOKS_DISABLED: "1" }, 4242), null);
+});
