@@ -76,3 +76,27 @@ test("背景列的副標是 workspace 名稱 · 背景，圓點是藍色", () =>
   assert.ok(row.texts.includes("api · 背景"));
   assert.equal(row.dot, "#0A84FF");
 });
+
+test("分頁也有的 port 只出現一次，照分頁列顯示", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([8080], [tab("t1", "server", "s1", [8080])])] });
+  const rows = s.rows();
+  assert.equal(rows.length, 1);
+  assert.notEqual(rows[0].dot, "#0A84FF");
+  assert.ok(rows[0].texts.includes("api · server"));
+});
+
+test("背景列與分頁列一起依 port 排序，總數包含背景列", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([3000, 5000, 9000], [tab("t1", "server", "s1", [5000])])] });
+  assert.deepEqual(s.rows().map((r) => r.port), [3000, 5000, 9000]);
+  assert.ok(s.texts().includes("3"));
+});
+
+test("背景列的開啟按鈕用瀏覽器開 localhost", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [])] });
+  assert.deepEqual(s.tap(9000, "safari"), [{ fn: "openURL", url: "http://localhost:9000" }]);
+});
+
+test("workspace 沒有 ports 欄位時不出錯，也沒有背景列", () => {
+  const s = loadSidebar("services", { workspaces: [{ id: "w1", title: "api", tabs: [tab("t1", "server", "s1", [8080])] }] });
+  assert.deepEqual(s.rows().map((r) => r.port), [8080]);
+});
