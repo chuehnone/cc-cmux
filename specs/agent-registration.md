@@ -57,7 +57,7 @@
 
 實跑（verify-cc-cmux）：
 
-9. 同一個測試 workspace 啟動兩個帶 hook 的 `claude -p`，各用背景 Bash 啟動一個 server。兩個 port 在 30 秒內一直出現在 `sidebar-state` 的 `ports=`，面板上也各有一列 `:<port>`。對照組（不帶 hook）同樣條件下，`ports=` 只有其中一個背景 port。
+9. 同一個測試 workspace 啟動兩個帶 hook 的 `claude -p`，各用背景 Bash 啟動一個 server。兩個 port 在 30 秒內一直出現在 `sidebar-state` 的 `ports=`，面板上也各有一列 `:<port>`。對照組（不帶 hook）同樣條件下，兩個背景 port 不會同時出現在 `ports=`。
 10. 帶 hook 時，`sidebar-state` 的 `status_count` 與對照組相同。
 11. 測試 Claude 與它的背景 server 結束後，15 秒內 port 從 `ports=` 消失。
 12. 回歸：install、list、stop、services-background 照舊通過。
@@ -107,6 +107,17 @@
   1. 專案層 settings 的 hook 會被執行（`cmux top` 出現 `cc-cmux.claude.<PID>` 的 tag）。
   2. cmux 自己的 hook 仍有效（`claude_code` tag 仍在）。
   3. 兩個 `claude -p` 都屬於同一個 workspace。
+
+## 實作中的更新
+
+2026-11-01 實作第 2 步，用探針 hook（只把環境變數寫進檔案）在測試 workspace 啟動兩個 `claude -p`：
+
+- 專案層 `.claude/settings.json` 的 `SessionStart`、`UserPromptSubmit` hook 都有執行。hook 的 `$PPID` 就是 Claude 的 PID，與 `CMUX_CLAUDE_PID` 相同。
+- cmux 自己的 hook 仍有效：`claude_code` tag 仍在。
+- 兩個 Claude 的 `CMUX_TAB_ID` 相同，屬於同一個 workspace。
+- 對照組：30 秒內 `ports=none`，兩個背景 port 都不在。`claude_code` 記的 PID 底下也有背景 server，但沒有被偵測到，原因未查出。規劃時預期「只有其中一個」，所以對照組的條件改成「兩個背景 port 不會同時出現」。
+- 手動用 `set_agent_pid cc-cmux.claude.<PID> <PID> --tab=<workspace>` 登記兩個 Claude 後，2 秒內 `ports=` 出現兩個背景 port，`status_count` 不變（1）。
+- 用 `&` 放到背景的那個 `claude -p` 與它的背景 server，在關閉測試 window 後仍存活。所以 ccv 的 cleanup 要記錄每一個 Claude 與 server 的 PID，並逐一結束。
 
 ## 不做的事
 
