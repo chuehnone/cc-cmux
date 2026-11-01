@@ -169,3 +169,15 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 ```sh
 ccv launch && ccv doctor && ccv capture before-stop && ccv click stop && ccv check-stop; ccv cleanup
 ```
+
+## 新功能
+
+用這個 skill 實作 Services 面板的新功能時，照這五步做。新功能沿用上面的 Launch、Drive、Evidence、Cleanup，不要另外建 skill。
+
+依據：pstack `poteto-mode/playbooks/feature.md` 第 5 步 "Verify on the matching surface. \"Inconclusive\" or wrong-surface is not a pass."，以及第 6 步的 sequence-verifiable-units：每個小單位做完、驗證完、commit 後，才做下一個。
+
+1. **先寫驗證標準，再寫程式。** 複製 `features/_TEMPLATE.md`，存成 `features/<新功能>.md`，四個 H2 都要寫。寫明使用者怎麼進入、怎麼操作，以及看到什麼結果算成功。成功條件要寫成能觀察的狀態，例如 port、`sidebar-state` 的值、AX 列、畫面文字。不要寫「看起來正常」。需求還模糊時，先用 grill-me 問清楚。這個檔要在寫程式之前 commit，至少要在寫程式之前寫好。理由：先寫程式再寫標準，標準容易照著程式寫，驗證就證明不了什麼。
+2. **確認 ccv 能操作新的 UI。** 逐條對照第 1 步的 Drive，確認每個操作和每個成功條件都有 `ccv` 指令可用。不能時，先擴充 `scripts/ccv.mjs`，並實跑一次證明能用，再開始實作。
+3. **一小段一小段做。** 每完成一小段，就跑一次這個功能的 Drive 和 Evidence。通過後才 commit 這一段，再做下一段。失敗時，先 `ccv cleanup`，修好再跑。
+4. **交件時附上證據，並回歸測試。** 附上新功能的證據路徑 `~/.cache/cc-cmux-verify/<run>/`。再跑一次既有功能（install、list、stop），確認舊功能沒壞。
+5. **驗證不了的部分，回報「未驗證」。** 未驗證不算通過。目前未驗證的有：2 倍螢幕上的點擊、`services-focus`、`services-open`、分頁有 agent 時的鎖頭與橘點、空狀態。新功能用到這些地方時，先補上驗證。
