@@ -139,3 +139,8 @@ test("底部說明提到藍點代表背景服務", () => {
   const s = loadSidebar("services", { workspaces: [] });
   assert.ok(s.texts().some((t) => typeof t === "string" && t.includes("藍點") && t.includes("背景")));
 });
+
+test("同一個 workspace 的 ports 有重複值時，背景列只出現一次", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000, 9000], [])] });
+  assert.deepEqual(s.rows().map((r) => r.port), [9000]);
+});
