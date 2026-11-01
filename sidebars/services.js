@@ -15,6 +15,17 @@ const rows = () => {
         });
       }
     }
+    const tabPorts = new Set((w.tabs ?? []).flatMap((t) => t.ports ?? []));
+    for (const p of w.ports ?? []) {
+      if (tabPorts.has(p)) continue;
+      out.push({
+        key: w.id + ":bg:" + p,
+        port: p,
+        workspaceId: w.id,
+        workspaceTitle: w.title,
+        background: true,
+      });
+    }
   }
   return out.sort((a, b) => a.port - b.port).slice(0, 50);
 };

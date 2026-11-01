@@ -62,3 +62,10 @@ test("分頁有 agent 時顯示橘點與鎖頭，點了不送 Ctrl+C", () => {
   assert.equal(calls.filter((c) => c.fn === "cmux").length, 0);
   assert.equal(calls[0].fn, "log");
 });
+
+const bgWs = (ports, tabs, agents) => ({ id: "w1", title: "api", ports, tabs, agents });
+
+test("workspace 有、分頁沒有的 port 出現一列", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([8080, 9000], [tab("t1", "server", "s1", [8080])])] });
+  assert.deepEqual(s.rows().map((r) => r.port), [8080, 9000]);
+});
