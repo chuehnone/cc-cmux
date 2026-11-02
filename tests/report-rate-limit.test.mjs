@@ -68,3 +68,11 @@ test("已用 120% 時進度值夾成 1，label 保留 120", { timeout: 5000 }, a
   await runWriter(sevenDay(120), { CMUX_WORKSPACE_ID: "W1" }, fake);
   assert.match(fake.calls()[0] ?? "", /^set-progress 1 --label cc-cmux:7d:personal:1900000000:\d+:120 --workspace W1$/);
 });
+
+test("stdin 不是 JSON 時不印 stdout，exit 0", { timeout: 5000 }, async () => {
+  const fake = fakeCmux();
+  const r = await runWriter("not json", { CMUX_WORKSPACE_ID: "W1" }, fake);
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "");
+  assert.deepEqual(fake.calls(), []);
+});
