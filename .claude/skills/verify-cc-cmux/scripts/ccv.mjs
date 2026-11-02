@@ -207,7 +207,18 @@ async function usageLive(account = "personal") {
   log(state, "usage-live " + account + " workspace=" + ws[1] + " command=" + command);
   const t0 = Date.now();
   let line = "";
+  let trusted = false;
   while (Date.now() - t0 < 120000) {
+    const screen = cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "";
+    if (!trusted && /❯ No, exit/.test(screen) && /Yes, I trust this folder/.test(screen)) {
+      cmux("send-key", "--workspace", ws[1], "down");
+      await sleep(300);
+      const picked = cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "";
+      if (!/❯ Yes, I trust this folder/.test(picked)) fail("信任對話框沒有選到 Yes, I trust this folder，不送 Enter");
+      cmux("send-key", "--workspace", ws[1], "enter");
+      trusted = true;
+      log(state, "usage-live " + account + " 信任對話框，選 Yes, I trust this folder 後送 Enter");
+    }
     line = progressLine(ws[1]);
     if (line.includes("cc-cmux:7d:")) {
       log(state, "usage-live ready " + account + " after=" + (Date.now() - t0) + "ms " + line);
