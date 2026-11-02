@@ -40,4 +40,8 @@ Preconditions:
 - 公司帳號的 statusline 子行程會不會繼承 `CLAUDE_CONFIG_DIR`，規劃時未實測。`usage-live work` 的 label 是 `personal` 時，回報失敗，回到規劃。
 - `usage-set` 的剩餘秒數從執行當下算起。`ccv usage-rows` 若在跨分鐘時執行，分鐘數可能差 1（面板的 clock 約每秒更新一次）；判定只看天與小時。
 - 顏色不用 AX 讀。只用截圖判斷。
-- 未驗證：cmux 在背景時，`set-progress` 的值會不會立刻反映到面板。
+- `usage-live work` 第一次在這個 repo 目錄啟動公司帳號時，會出現信任對話框，預設選項是「No, exit」。`ccv usage-live` 先送「下」，確認選到「Yes, I trust this folder」才送 Enter。只送 Enter 會讓 Claude 直接結束。
+- `cmux shot` 偶爾回報 `OwnWindowFrameCapture.Failure`，capture 會中斷，那一份 `.txt` 也不會產生。重跑同一個 capture 即可。
+- 2026-11-02 實跑：cmux 在背景（前景是 Google Chrome）時，`set-progress` 寫入後，面板的 7d 列一樣在 5 秒內更新（run `20261102T144920-uetn`）。
+- 2026-11-02 實跑結果：usage-row、usage-red、usage-accounts、usage-cleanup PASS（run `20261102T144819-d7qp`、`20261102T144951-jkcg`）。usage-live 兩個帳號都寫入成功，但前景是 Google Chrome，依前置條件不算通過（run `20261102T144920-uetn`）。回歸 install、list、stop PASS（run `20261102T144951-jkcg`）。
+- 只有單元測試、沒有實跑：同一個帳號在兩個 workspace 有值時取最新一筆、label 格式錯時略過、clock 前進時剩餘時間跟著變。

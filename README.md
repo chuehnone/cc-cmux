@@ -124,6 +124,7 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 - 有 Claude 的 workspace，左側欄會多一條進度條，label 是 `cc-cmux:7d:...`。
 - 一個 workspace 只有一個 `progress`。其他工具呼叫 `set-progress` 時會互相覆蓋。個人帳號與公司帳號的 Claude 開在同一個 workspace 時也會互相覆蓋，面板只看得到最後寫入的帳號。
 - 7d 的已用百分比只在 Claude 有回應時更新。剩餘時間由面板依時鐘計算，不必等新資料。
+- cmux 不在前景時，7d 列一樣會更新。2026-11-02 實跑時，前景是別的 app，寫入後 5 秒內面板就更新了。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
 
 ## 維護

@@ -168,7 +168,10 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 | `ccv bg-start --with-hook` | 在暫存資料夾寫專案層 `.claude/settings.json`，`SessionStart` 與 `UserPromptSubmit` 執行 repo 的 `hooks/register-agent.mjs`。不改使用者的 `~/.claude/settings.json`。可與 `--count` 一起用 |
 | `ccv bg-kill <編號>` | 只結束 `bg-start` 記錄的第 N 個 claude 與它的 server（編號從 1 開始，依 port 順序） |
 | `ccv wait-row <present\|absent>` | 等面板的 `:<port>` 出現或消失 |
-| `ccv capture <label>` | 存截圖和狀態 |
+| `ccv usage-set <personal\|work> <已用%> <距重置秒數>` | 用測試 JSON 執行 `statusline/report-rate-limit.mjs`。personal 寫到 server 的 workspace，work 寫到另開的 workspace。不用 token |
+| `ccv usage-rows` | 列出面板上的 7d 列文字，由上到下 |
+| `ccv usage-live [work]` | 在本次 run 的 window 開互動模式的 `claude --model haiku`，送一句 prompt，等 `sidebar-state` 出現 `cc-cmux:7d:` 開頭的 progress。`work` 帶 `CLAUDE_CONFIG_DIR=$HOME/.claude-work`。會用到 token。前提是 statusline 腳本已呼叫寫入程式 |
+| `ccv capture <label>` | 存截圖和狀態。另外記錄面板的 7d 列與每個 workspace 的 `progress=` |
 | `ccv cleanup [run]` | 收掉這個 run 開的東西，保留證據 |
 
 不帶 `[run]` 時，用 `latest` 記錄的 run。
