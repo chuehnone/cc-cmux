@@ -212,3 +212,11 @@ test("已過重置時間時顯示已重置，等待更新", () => {
   const edge = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 0, 90)], clock: { epoch: NOW } });
   assert.deepEqual(edge.usage().map((u) => u.text), ["個人 7d 已重置，等待更新"]);
 });
+
+test("clock 前進 1 小時，剩餘時間少 1 小時", () => {
+  const clock = { epoch: NOW };
+  const s = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 5 * HOUR + 60, 10)], clock });
+  assert.equal(s.usage()[0]?.text, "個人 7d 剩 5 小時 1 分 · 已用 10%");
+  clock.epoch = NOW + HOUR;
+  assert.equal(s.usage()[0]?.text, "個人 7d 剩 4 小時 1 分 · 已用 10%");
+});
