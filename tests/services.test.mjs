@@ -200,3 +200,8 @@ test("label 不是 cc-cmux:7d: 開頭或格式錯時略過", () => {
   });
   assert.deepEqual(s.usage().map((u) => u.text), ["公司 7d 剩 1 天 0 小時 · 已用 31%"]);
 });
+
+test("沒有任何 7 天資料時顯示一列 7d 無資料", () => {
+  const s = loadSidebar("services", { workspaces: [ws("w1", "api", [tab("t1", "server", "s1", [8080])])], clock: { epoch: NOW } });
+  assert.deepEqual(s.usage(), [{ text: "7d 無資料", color: "tertiary" }]);
+});

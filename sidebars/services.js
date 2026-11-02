@@ -57,7 +57,9 @@ const usageRows = () => {
     latest[account] = { account, resetsAt: Number(resetsAt), writtenAt: Number(writtenAt), pct: Number(pct) };
   }
   const now = data.clock()?.epoch ?? 0;
-  return Object.keys(ACCOUNT_NAMES).filter((a) => latest[a]).map((a) => latest[a]).map((u) => {
+  const found = Object.keys(ACCOUNT_NAMES).filter((a) => latest[a]).map((a) => latest[a]);
+  if (found.length === 0) return [{ account: "none", text: "7d 無資料", color: "tertiary" }];
+  return found.map((u) => {
     const pct = Math.round(u.pct);
     return {
       account: u.account,
