@@ -52,6 +52,7 @@ const usageRows = () => {
     const parts = (w.progress?.label ?? "").split(":");
     if (parts.length !== 6 || parts[0] !== "cc-cmux" || parts[1] !== "7d") continue;
     const [, , account, resetsAt, writtenAt, pct] = parts;
+    if (latest[account] && latest[account].writtenAt >= Number(writtenAt)) continue;
     latest[account] = { account, resetsAt: Number(resetsAt), writtenAt: Number(writtenAt), pct: Number(pct) };
   }
   const now = data.clock()?.epoch ?? 0;

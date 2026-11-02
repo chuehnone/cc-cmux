@@ -176,3 +176,11 @@ test("兩個帳號都有值時，個人在上、公司在下", () => {
   const s = loadSidebar("services", { workspaces: [usageWs("w1", "work", DAY, 31), usageWs("w2", "personal", DAY, 78)], clock: { epoch: NOW } });
   assert.deepEqual(s.usage().map((u) => u.text.slice(0, 2)), ["個人", "公司"]);
 });
+
+test("同一個帳號在兩個 workspace 有值時，取寫入時間較新的一筆", () => {
+  const s = loadSidebar("services", {
+    workspaces: [usageWs("w1", "personal", DAY, 50, NOW - 10), usageWs("w2", "personal", DAY, 40, NOW - 100)],
+    clock: { epoch: NOW },
+  });
+  assert.deepEqual(s.usage().map((u) => u.text), ["個人 7d 剩 1 天 0 小時 · 已用 50%"]);
+});
