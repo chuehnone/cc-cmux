@@ -31,12 +31,13 @@
 | 提醒 | 已用 ≥ 85% 時文字變紅 | 額度快用完時要被提醒。 |
 | 位置 | Services 面板標題列下面加列 | 右側欄一次只顯示一個面板。另開面板要切換才看得到，提醒就沒效。 |
 | 資料來源 | statusline 輸入的 `rate_limits.seven_day` | 官方只有 statusline 提供訂閱額度。不碰登入憑證。 |
-| 管道 | 寫入程式執行 `cmux set-progress`，label 為 `cc-cmux:7d:<帳號>:<resets_at>:<寫入時間>` | sidebar 讀不到檔案。`progress` 不會蓋掉使用者寫的 workspace 說明。代價：左側欄多一條進度條。 |
+| 管道 | 寫入程式執行 `cmux set-progress`，label 為 `cc-cmux:7d:<帳號>:<resets_at>:<寫入時間>:<已用%>` | sidebar 讀不到檔案。`progress` 不會蓋掉使用者寫的 workspace 說明。代價：左側欄多一條進度條。 |
 | 呼叫 cmux 的方式 | 用 `cmux set-progress` CLI，不直接連 socket | CLI 有文件，socket 指令沒有，改版較不容易壞。 |
 | 帳號 | 個人、公司各一列；`CLAUDE_CONFIG_DIR` 以 `.claude-work` 結尾時記成 `work`，否則記成 `personal` | 兩個帳號的額度分開算。混在一列會跳動，也看不出是誰。 |
 | 寫入程式的位置 | `statusline/report-rate-limit.mjs` | 它不是 Claude Code hook。放 `hooks/` 會讓人以為要加進 `settings.json` 的 `hooks`。 |
 | statusline 怎麼呼叫 | statusline 腳本用 `&` 在背景執行寫入程式 | 寫入程式最多等 1 秒，不能拖慢 statusline。 |
 | 節流 | 不節流，每次都寫 | 寫入時間要更新，面板才挑得出最新一筆。 |
+| 百分比的來源 | 面板一律讀 label 裡的已用%。`progress.value` 只用來畫左側欄的進度條 | 進度值會夾在 0–1，超過 100% 的原始值只留在 label。實作第 5 輪時發現原本的 label 沒有百分比，與「label 用原始值」矛盾，使用者同意改格式。 |
 | 紅色門檻的判斷 | 用四捨五入後的整數判斷 | 文字和顏色才一致。 |
 | 改使用者的 statusline 腳本 | 實作時改，改前先問使用者 | 使用者指定。 |
 
@@ -52,7 +53,7 @@
 5. 兩個帳號都沒有資料時，顯示一列 `7d 無資料`，`color` 是 `tertiary`。只有一個帳號沒有資料時，不畫那個帳號的列。
 6. 已過 `resets_at` 時，該帳號那一列顯示 `<帳號> 7d 已重置，等待更新`。
 7. 兩個帳號都有資料時，個人在上、公司在下。
-8. statusline 收到有 `seven_day` 的 JSON，且在 cmux 裡時，該 workspace 的 `cmux sidebar-state` 出現 `progress=`，label 以 `cc-cmux:7d:<帳號>:` 開頭。
+8. statusline 收到有 `seven_day` 的 JSON，且在 cmux 裡時，該 workspace 的 `cmux sidebar-state` 出現 `progress=`，label 以 `cc-cmux:7d:<帳號>:` 開頭，最後一欄是已用%。
 9. 現有的 port 列、按鈕與測試行為不變。
 
 ## 邊界情況
@@ -92,6 +93,7 @@ README 的已知限制要加：
 - 面板只看得到同一個 window 的 workspace。Claude 在別的 window 時，這個 window 的面板看不到它的額度。
 - 有 Claude 的 workspace，左側欄會多一條進度條，label 是 `cc-cmux:7d:...`。
 - 其他工具呼叫 `set-progress` 時會互相覆蓋。
+- 一個 workspace 只有一個 `progress`。個人帳號與公司帳號的 Claude 開在同一個 workspace 時，互相覆蓋，面板只看得到最後寫入的帳號。
 - cmux 在背景時的行為，照實跑結果寫。
 
 ## 測試清單
@@ -113,7 +115,7 @@ README 的已知限制要加：
 
 寫入程式（`tests/report-rate-limit.test.mjs`，用 PATH 上的假 `cmux` 執行檔記錄參數）：
 
-1. 有 `seven_day`（已用 78）且有 `CMUX_WORKSPACE_ID` → 執行 `cmux set-progress 0.78 --label cc-cmux:7d:personal:<resets_at>:<寫入時間> --workspace <CMUX_WORKSPACE_ID>`。
+1. 有 `seven_day`（已用 78）且有 `CMUX_WORKSPACE_ID` → 執行 `cmux set-progress 0.78 --label cc-cmux:7d:personal:<resets_at>:<寫入時間>:78 --workspace <CMUX_WORKSPACE_ID>`。
 2. `CLAUDE_CONFIG_DIR` 以 `.claude-work` 結尾 → 帳號是 `work`。
 3. 沒有 `seven_day` → 不執行 cmux。
 4. 沒有 `CMUX_WORKSPACE_ID` → 不執行 cmux。
