@@ -79,6 +79,38 @@ cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 work
 
 移除：從 `~/.claude/settings.json` 刪掉這兩筆。已登記的 PID 會在 Claude 結束後由 cmux 清掉。
 
+### 顯示 Claude 7 天額度的剩餘時間（選用）
+
+面板標題列下面顯示 Claude 訂閱 7 天視窗還剩多久重置，以及已用百分比。個人帳號與公司帳號各一列，例如：
+
+```
+個人 7d 剩 2 天 5 小時 · 已用 78%
+公司 7d 剩 4 天 2 小時 · 已用 31%
+```
+
+- 已用 85% 以上（四捨五入後）時，那一列變紅。
+- 剩餘時間不到 1 天時顯示 `M 小時 K 分`，不到 1 小時時顯示 `K 分`。秒數捨去。
+- 過了重置時間、還沒有新資料時，顯示 `已重置，等待更新`。
+- 兩個帳號都沒有資料時，顯示 `7d 無資料`。
+
+資料來自 Claude Code 傳給 statusline 的 `rate_limits.seven_day`。`statusline/report-rate-limit.mjs` 把它寫成 Claude 所在 workspace 的 `progress`，面板再從所有 workspace 的 `progress` 讀出來。理由：sidebar 不能讀檔案，也不能連網路。官方只有 statusline 提供訂閱額度。
+
+安裝：在 statusline 腳本裡，把 stdin 先存成變數，再在背景傳給寫入程式。`<cc-cmux 的路徑>` 換成這個 repo 的絕對路徑。
+
+```sh
+input=$(cat)
+printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs >/dev/null 2>&1 &
+```
+
+行為：
+
+- 沒有 `rate_limits.seven_day`，或不在 cmux 裡（沒有 `CMUX_WORKSPACE_ID`）時，什麼都不做，也不清掉舊值。
+- `CLAUDE_CONFIG_DIR` 以 `.claude-work` 結尾時記成公司帳號，否則記成個人帳號。
+- 執行 `cmux set-progress <已用/100> --label cc-cmux:7d:<帳號>:<resets_at>:<寫入時間>:<已用%>`。進度值夾在 0 到 1；label 保留原始百分比。
+- 不印 stdout，最多等 cmux 1 秒，一律 exit 0。
+
+移除：從 statusline 腳本刪掉那一行。已寫入的 `progress` 可以用 `cmux clear-progress --workspace <workspace>` 清掉。
+
 ### 已知限制
 
 - 面板只列出有開 port 的服務。背景執行但沒有開 port 的 shell（例如 build、test）不會出現。
@@ -88,6 +120,10 @@ cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 work
 - cmux 不是前景 app 時，背景服務不會更新：新的背景服務不出現，或結束的不消失。切回 cmux 後約 2–3 秒內更新。原因是 cmux 在背景時會暫停定期的 agent 掃描。cmux 放在第二個螢幕、但正在用別的 app 時，也是如此。
 - 面板看不出背景服務是哪個 agent 啟動的。
 - 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
+- 7d 列只看得到同一個 window 的 workspace。Claude 在別的 window 時，這個 window 的面板看不到它的額度。
+- 有 Claude 的 workspace，左側欄會多一條進度條，label 是 `cc-cmux:7d:...`。
+- 一個 workspace 只有一個 `progress`。其他工具呼叫 `set-progress` 時會互相覆蓋。個人帳號與公司帳號的 Claude 開在同一個 workspace 時也會互相覆蓋，面板只看得到最後寫入的帳號。
+- 7d 的已用百分比只在 Claude 有回應時更新。剩餘時間由面板依時鐘計算，不必等新資料。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
 
 ## 維護
