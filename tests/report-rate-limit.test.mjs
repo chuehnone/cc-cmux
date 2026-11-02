@@ -76,3 +76,10 @@ test("stdin 不是 JSON 時不印 stdout，exit 0", { timeout: 5000 }, async () 
   assert.equal(r.stdout, "");
   assert.deepEqual(fake.calls(), []);
 });
+
+test("cmux 卡住時 1 秒內結束，exit 0", { timeout: 5000 }, async () => {
+  const fake = fakeCmux("sleep 10\n");
+  const r = await runWriter(sevenDay(78), { CMUX_WORKSPACE_ID: "W1" }, fake);
+  assert.equal(r.code, 0);
+  assert.ok(r.ms < 1500, "花了 " + r.ms + "ms");
+});
