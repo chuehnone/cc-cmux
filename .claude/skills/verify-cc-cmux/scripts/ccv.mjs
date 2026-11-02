@@ -124,6 +124,103 @@ function findRow(state, port = state.port) {
   return { row, title, subtitle };
 }
 
+const USAGE_TEXT = /^(個人 |公司 )?7d /;
+
+function usageRows(state) {
+  const ws = cua("get_window_state", { pid: state.appPid, window_id: state.cuaWindowId, include_screenshot: false });
+  return (ws.elements || []).filter((e) => e.role === "AXStaticText" && USAGE_TEXT.test(e.label || "")).sort((a, b) => (a.frame?.y ?? 0) - (b.frame?.y ?? 0)).map((e) => e.label);
+}
+
+function usageRowsSafe(state) {
+  try {
+    return usageRows(state);
+  } catch (e) {
+    return ["(讀取失敗：" + e.message + ")"];
+  }
+}
+
+function usageWorkspaces(state) {
+  return [["server", state.serverWorkspace], ...Object.entries(state.usage?.workspaces || {})];
+}
+
+function progressLine(workspace) {
+  return ((cmuxTry("sidebar-state", "--workspace", workspace) || "").match(/^progress=.*$/m) || ["(無 progress 行)"])[0];
+}
+
+function usageWorkspace(state, key) {
+  state.usage = state.usage || { workspaces: {} };
+  if (key === "personal") return state.serverWorkspace;
+  if (state.usage.workspaces[key]) return state.usage.workspaces[key];
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-usage-" + key + "-" + state.runId).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.usage.workspaces[key] = ws[1];
+  saveState(state);
+  log(state, "new-workspace " + ws[1] + " for usage " + key);
+  return ws[1];
+}
+
+function accountEnv(account) {
+  const env = { ...process.env };
+  delete env.CLAUDE_CONFIG_DIR;
+  if (account === "work") env.CLAUDE_CONFIG_DIR = join(homedir(), ".claude-work");
+  return env;
+}
+
+function usageSet(account, pct, secs) {
+  const state = loadState();
+  if (account !== "personal" && account !== "work") fail("用法：ccv.mjs usage-set <personal|work> <已用%> <距重置秒數>");
+  if (!Number.isFinite(Number(pct)) || !Number.isInteger(Number(secs))) fail("已用% 要是數字，距重置秒數要是整數");
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const workspace = usageWorkspace(state, account);
+  const resetsAt = Math.floor(Date.now() / 1000) + Number(secs);
+  const input = JSON.stringify({ rate_limits: { seven_day: { used_percentage: Number(pct), resets_at: resetsAt } } });
+  const writer = join(REPO, "statusline", "report-rate-limit.mjs");
+  if (!existsSync(writer)) fail("找不到 " + writer);
+  execFileSync("node", [writer], { input, env: { ...accountEnv(account), CMUX_WORKSPACE_ID: workspace }, stdio: ["pipe", "ignore", "ignore"], timeout: 5000 });
+  const line = progressLine(workspace);
+  log(state, "usage-set " + account + " pct=" + pct + " resets_at=" + resetsAt + " workspace=" + workspace + " " + line);
+  if (!line.includes("cc-cmux:7d:" + account + ":" + resetsAt + ":")) fail("寫入後 " + workspace + " 的 sidebar-state 沒有預期的 label：" + line);
+  console.log("USAGE SET " + account + " workspace=" + workspace + " " + line);
+}
+
+function usageRowsCmd() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const rows = usageRows(state);
+  log(state, "usage-rows " + JSON.stringify(rows));
+  console.log(rows.length ? rows.join("\n") : "(面板沒有 7d 列)");
+}
+
+async function usageLive(account = "personal") {
+  const state = loadState();
+  if (account !== "personal" && account !== "work") fail("用法：ccv.mjs usage-live [work]");
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const key = "live-" + account;
+  if (state.usage?.workspaces?.[key]) fail("這個 run 已經有 " + key);
+  const prefix = account === "work" ? "CLAUDE_CONFIG_DIR=$HOME/.claude-work " : "env -u CLAUDE_CONFIG_DIR ";
+  const command = "cd " + JSON.stringify(REPO) + " && " + prefix + "claude --model haiku 'Reply with exactly OK and nothing else.'";
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-usage-" + key + "-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.usage = state.usage || { workspaces: {} };
+  state.usage.workspaces[key] = ws[1];
+  saveState(state);
+  log(state, "usage-live " + account + " workspace=" + ws[1] + " command=" + command);
+  const t0 = Date.now();
+  let line = "";
+  while (Date.now() - t0 < 120000) {
+    line = progressLine(ws[1]);
+    if (line.includes("cc-cmux:7d:")) {
+      log(state, "usage-live ready " + account + " after=" + (Date.now() - t0) + "ms " + line);
+      console.log("USAGE LIVE " + account + " workspace=" + ws[1] + " " + line);
+      return;
+    }
+    await sleep(2000);
+  }
+  writeFileSync(join(state.evidenceDir, "usage-live-" + account + "-timeout.txt"), now() + "\n" + line + "\n\n" + (cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "(read-screen 失敗)") + "\n");
+  log(state, "usage-live timeout " + account + " " + line);
+  fail("120 秒內 " + ws[1] + " 的 sidebar-state 沒有 cc-cmux:7d: 開頭的 progress。畫面存在 usage-live-" + account + "-timeout.txt");
+}
+
 function targetPort(state, target) {
   if (!target) return state.port;
   if (target === "bg") {
@@ -300,6 +397,8 @@ function capture(label) {
   const { row } = window_row_safe(state);
   sec("panel row :" + state.port, row ? "present " + JSON.stringify(row.frame) : "absent");
   sec("status_count", ((cmuxTry("sidebar-state", "--workspace", state.serverWorkspace) || "").match(/^status_count=.*$/m) || ["(無)"])[0]);
+  sec("usage rows", usageRowsSafe(state).join("\n") || "(面板沒有 7d 列)");
+  sec("usage progress", usageWorkspaces(state).map(([k, ws]) => k + " " + ws + " " + progressLine(ws)).join("\n"));
   if (state.bg?.ports) {
     const bgState = cmuxTry("sidebar-state", "--workspace", state.bg.workspace) || "";
     const portsLine = (bgState.match(/^ports=.*$/m) || ["(無)"])[0];
@@ -533,9 +632,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|cleanup [run]>");
   process.exit(2);
 }
 try {
