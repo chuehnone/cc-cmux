@@ -56,10 +56,11 @@ const usageRows = () => {
   }
   const now = data.clock()?.epoch ?? 0;
   return Object.values(latest).map((u) => {
+    const pct = Math.round(u.pct);
     return {
       account: u.account,
-      text: ACCOUNT_NAMES[u.account] + " 7d 剩 " + formatLeft(u.resetsAt - now) + " · 已用 " + Math.round(u.pct) + "%",
-      color: "secondary",
+      text: ACCOUNT_NAMES[u.account] + " 7d 剩 " + formatLeft(u.resetsAt - now) + " · 已用 " + pct + "%",
+      color: pct >= 85 ? "#FF453A" : "secondary",
     };
   });
 };

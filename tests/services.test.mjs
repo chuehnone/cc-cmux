@@ -164,3 +164,10 @@ test("不到 1 天顯示小時與分，不到 1 小時只顯示分，秒數捨�
   const t = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 12 * 60 + 59, 10)], clock: { epoch: NOW } });
   assert.equal(t.usage()[0]?.text, "個人 7d 剩 12 分 · 已用 10%");
 });
+
+test("四捨五入後已用 85% 以上變紅，84% 維持灰色", () => {
+  const red = loadSidebar("services", { workspaces: [usageWs("w1", "personal", DAY, 84.6)], clock: { epoch: NOW } });
+  assert.deepEqual(red.usage(), [{ text: "個人 7d 剩 1 天 0 小時 · 已用 85%", color: "#FF453A" }]);
+  const gray = loadSidebar("services", { workspaces: [usageWs("w1", "personal", DAY, 84.4)], clock: { epoch: NOW } });
+  assert.deepEqual(gray.usage(), [{ text: "個人 7d 剩 1 天 0 小時 · 已用 84%", color: "secondary" }]);
+});
