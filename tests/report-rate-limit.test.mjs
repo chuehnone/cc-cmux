@@ -48,3 +48,10 @@ test("CLAUDE_CONFIG_DIR 以 .claude-work 結尾時，帳號記成 work", { timeo
   await runWriter(sevenDay(31), { CMUX_WORKSPACE_ID: "W1", CLAUDE_CONFIG_DIR: "/home/u/.claude-work" }, fake);
   assert.match(fake.calls()[0] ?? "", / --label cc-cmux:7d:work:1900000000:\d+ /);
 });
+
+test("沒有 seven_day 時不執行 cmux，exit 0", { timeout: 5000 }, async () => {
+  const fake = fakeCmux();
+  const r = await runWriter({ rate_limits: { five_hour: { used_percentage: 10, resets_at: 1900000000 } } }, { CMUX_WORKSPACE_ID: "W1" }, fake);
+  assert.equal(r.code, 0);
+  assert.deepEqual(fake.calls(), []);
+});
