@@ -184,3 +184,19 @@ test("同一個帳號在兩個 workspace 有值時，取寫入時間較新的一
   });
   assert.deepEqual(s.usage().map((u) => u.text), ["個人 7d 剩 1 天 0 小時 · 已用 50%"]);
 });
+
+test("label 不是 cc-cmux:7d: 開頭或格式錯時略過", () => {
+  const bad = (id, label) => ({ id, title: id, tabs: [], progress: { value: 0.5, label } });
+  const s = loadSidebar("services", {
+    workspaces: [
+      bad("w1", "Building..."),
+      bad("w2", "cc-cmux:7d:personal:" + (NOW + DAY) + ":" + NOW),
+      bad("w3", "cc-cmux:7d:personal:abc:" + NOW + ":50"),
+      bad("w4", "cc-cmux:7d:someone:" + (NOW + DAY) + ":" + NOW + ":50"),
+      { id: "w5", title: "w5", tabs: [] },
+      usageWs("w6", "work", DAY, 31),
+    ],
+    clock: { epoch: NOW },
+  });
+  assert.deepEqual(s.usage().map((u) => u.text), ["公司 7d 剩 1 天 0 小時 · 已用 31%"]);
+});
