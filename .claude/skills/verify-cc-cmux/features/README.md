@@ -48,4 +48,4 @@
 | 用瀏覽器開啟服務 | [services-open.md](./services-open.md) | 未實跑 |
 | 列出背景服務 | [services-background.md](./services-background.md) | 已實跑：bg-row、bg-lock PASS；bg-focus 不穩定；bg-open 未驗證 |
 | 登記每一個 Claude Code session | [agent-registration.md](./agent-registration.md) | 已實跑（cmux 在前景）：reg-both、reg-control、reg-no-status、reg-cleanup PASS |
-| 顯示 Claude 7 天額度的剩餘時間 | [claude-rate-limit.md](./claude-rate-limit.md) | 已實跑（2026-11-02）：usage-row、usage-red、usage-accounts、usage-cleanup PASS；usage-live 寫入成功但 cmux 不在前景，不算通過 |
+| 顯示 Claude 7 天額度的剩餘時間 | [claude-rate-limit.md](./claude-rate-limit.md) | 已實跑（2026-11-02）：usage-row、usage-red、usage-accounts、usage-live、usage-cleanup PASS |
