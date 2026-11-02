@@ -50,11 +50,11 @@ function walk(tree, visit) {
   for (const c of tree.children ?? []) walk(c, visit);
 }
 
-export function loadSidebar(name, { workspaces = [] } = {}) {
+export function loadSidebar(name, { workspaces = [], clock = { epoch: 0 } } = {}) {
   const calls = [];
   let builder = null;
   const context = {
-    data: { workspaces: () => workspaces },
+    data: { workspaces: () => workspaces, clock: () => clock },
     sidebar: (b) => { builder = b; },
     cmux: (method, params) => { calls.push({ fn: "cmux", method, params: JSON.parse(JSON.stringify(params)) }); },
     openURL: (url) => { calls.push({ fn: "openURL", url }); },
@@ -89,6 +89,11 @@ export function loadSidebar(name, { workspaces = [] } = {}) {
     });
     return out;
   };
+  const usage = () => {
+    const out = [];
+    walk(view(), (n) => { if (n.type === "Text" && /^(個人 |公司 )?7d /.test(n.value ?? "")) out.push({ text: n.value, color: n.color }); });
+    return out;
+  };
   const tap = (port, symbol) => {
     const row = rows().find((r) => r.port === port);
     if (!row) throw new Error("面板沒有 :" + port + " 這一列");
@@ -97,5 +102,5 @@ export function loadSidebar(name, { workspaces = [] } = {}) {
     button.tap();
     return calls;
   };
-  return { view, texts, rows, tap, calls };
+  return { view, texts, rows, usage, tap, calls };
 }

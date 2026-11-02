@@ -35,6 +35,29 @@ const rows = () => {
   return out.sort((a, b) => a.port - b.port).slice(0, 50);
 };
 
+const ACCOUNT_NAMES = { personal: "個人", work: "公司" };
+
+const usageRows = () => {
+  const latest = {};
+  for (const w of data.workspaces() ?? []) {
+    const parts = (w.progress?.label ?? "").split(":");
+    if (parts.length !== 6 || parts[0] !== "cc-cmux" || parts[1] !== "7d") continue;
+    const [, , account, resetsAt, writtenAt, pct] = parts;
+    latest[account] = { account, resetsAt: Number(resetsAt), writtenAt: Number(writtenAt), pct: Number(pct) };
+  }
+  const now = data.clock()?.epoch ?? 0;
+  return Object.values(latest).map((u) => {
+    const left = u.resetsAt - now;
+    const days = Math.floor(left / 86400);
+    const hours = Math.floor((left % 86400) / 3600);
+    return {
+      account: u.account,
+      text: ACCOUNT_NAMES[u.account] + " 7d 剩 " + days + " 天 " + hours + " 小時 · 已用 " + Math.round(u.pct) + "%",
+      color: "secondary",
+    };
+  });
+};
+
 function iconButton(symbol, color, action) {
   return Image(symbol).font(11).color(color)
     .paddingHorizontal(5).paddingVertical(3)
@@ -50,6 +73,10 @@ sidebar(() =>
       Spacer(),
       Text(() => String(rows().length)).font(11).color("tertiary"),
     ]).paddingHorizontal(10).paddingVertical(6),
+    ForEach(
+      { items: usageRows, key: (u) => u.account },
+      (u) => Text(() => u().text).font(11).color(() => u().color).paddingHorizontal(10)
+    ),
     Divider(),
     ForEach(
       { items: rows, key: (r) => r.key },

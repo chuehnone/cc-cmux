@@ -144,3 +144,16 @@ test("同一個 workspace 的 ports 有重複值時，背景列只出現一次",
   const s = loadSidebar("services", { workspaces: [bgWs([9000, 9000], [])] });
   assert.deepEqual(s.rows().map((r) => r.port), [9000]);
 });
+
+const NOW = 1900000000;
+const usageWs = (id, account, resetsIn, pct, writtenAt = NOW - 60) => ({
+  id, title: id, tabs: [],
+  progress: { value: Math.min(1, pct / 100), label: ["cc-cmux", "7d", account, NOW + resetsIn, writtenAt, pct].join(":") },
+});
+const DAY = 86400;
+const HOUR = 3600;
+
+test("個人帳號已用 78%、離重置 2 天 5 小時時，顯示一列灰字", () => {
+  const s = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 2 * DAY + 5 * HOUR + 300, 78)], clock: { epoch: NOW } });
+  assert.deepEqual(s.usage(), [{ text: "個人 7d 剩 2 天 5 小時 · 已用 78%", color: "secondary" }]);
+});
