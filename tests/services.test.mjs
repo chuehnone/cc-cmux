@@ -157,3 +157,10 @@ test("個人帳號已用 78%、離重置 2 天 5 小時時，顯示一列灰字"
   const s = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 2 * DAY + 5 * HOUR + 300, 78)], clock: { epoch: NOW } });
   assert.deepEqual(s.usage(), [{ text: "個人 7d 剩 2 天 5 小時 · 已用 78%", color: "secondary" }]);
 });
+
+test("不到 1 天顯示小時與分，不到 1 小時只顯示分，秒數捨去", () => {
+  const s = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 5 * HOUR + 12 * 60 + 40, 10)], clock: { epoch: NOW } });
+  assert.equal(s.usage()[0]?.text, "個人 7d 剩 5 小時 12 分 · 已用 10%");
+  const t = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 12 * 60 + 59, 10)], clock: { epoch: NOW } });
+  assert.equal(t.usage()[0]?.text, "個人 7d 剩 12 分 · 已用 10%");
+});

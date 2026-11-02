@@ -38,6 +38,6 @@ Preconditions:
 - `usage-live` 會用到 token。`work` 會用公司帳號的額度。
 - `rate_limits` 在 session 第一個 API 回應之後才出現。`usage-live` 要送出 prompt 並等到回應，才會有寫入。
 - 公司帳號的 statusline 子行程會不會繼承 `CLAUDE_CONFIG_DIR`，規劃時未實測。`usage-live work` 的 label 是 `personal` 時，回報失敗，回到規劃。
-- `usage-set` 的剩餘秒數從執行當下算起。`ccv usage-rows` 若在跨分鐘時執行，分鐘數可能少 1；判定只看天與小時。
+- `usage-set` 的剩餘秒數從執行當下算起。`ccv usage-rows` 若在跨分鐘時執行，分鐘數可能差 1（面板的 clock 約每秒更新一次）；判定只看天與小時。
 - 顏色不用 AX 讀。只用截圖判斷。
 - 未驗證：cmux 在背景時，`set-progress` 的值會不會立刻反映到面板。

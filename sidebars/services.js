@@ -37,6 +37,15 @@ const rows = () => {
 
 const ACCOUNT_NAMES = { personal: "個人", work: "公司" };
 
+const formatLeft = (left) => {
+  const days = Math.floor(left / 86400);
+  const hours = Math.floor((left % 86400) / 3600);
+  const minutes = Math.floor((left % 3600) / 60);
+  if (days >= 1) return days + " 天 " + hours + " 小時";
+  if (hours >= 1) return hours + " 小時 " + minutes + " 分";
+  return minutes + " 分";
+};
+
 const usageRows = () => {
   const latest = {};
   for (const w of data.workspaces() ?? []) {
@@ -47,12 +56,9 @@ const usageRows = () => {
   }
   const now = data.clock()?.epoch ?? 0;
   return Object.values(latest).map((u) => {
-    const left = u.resetsAt - now;
-    const days = Math.floor(left / 86400);
-    const hours = Math.floor((left % 86400) / 3600);
     return {
       account: u.account,
-      text: ACCOUNT_NAMES[u.account] + " 7d 剩 " + days + " 天 " + hours + " 小時 · 已用 " + Math.round(u.pct) + "%",
+      text: ACCOUNT_NAMES[u.account] + " 7d 剩 " + formatLeft(u.resetsAt - now) + " · 已用 " + Math.round(u.pct) + "%",
       color: "secondary",
     };
   });
