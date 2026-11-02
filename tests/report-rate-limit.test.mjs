@@ -42,3 +42,9 @@ test("有 7 天資料且在 cmux 裡時，用 set-progress 寫入個人帳號的
   assert.ok(m, "實際呼叫：" + calls[0]);
   assert.ok(Number(m[1]) >= before && Number(m[1]) <= after);
 });
+
+test("CLAUDE_CONFIG_DIR 以 .claude-work 結尾時，帳號記成 work", { timeout: 5000 }, async () => {
+  const fake = fakeCmux();
+  await runWriter(sevenDay(31), { CMUX_WORKSPACE_ID: "W1", CLAUDE_CONFIG_DIR: "/home/u/.claude-work" }, fake);
+  assert.match(fake.calls()[0] ?? "", / --label cc-cmux:7d:work:1900000000:\d+ /);
+});
