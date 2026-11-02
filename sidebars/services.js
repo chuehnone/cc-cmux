@@ -60,6 +60,7 @@ const usageRows = () => {
   const found = Object.keys(ACCOUNT_NAMES).filter((a) => latest[a]).map((a) => latest[a]);
   if (found.length === 0) return [{ account: "none", text: "7d 無資料", color: "tertiary" }];
   return found.map((u) => {
+    if (u.resetsAt <= now) return { account: u.account, text: ACCOUNT_NAMES[u.account] + " 7d 已重置，等待更新", color: "secondary" };
     const pct = Math.round(u.pct);
     return {
       account: u.account,

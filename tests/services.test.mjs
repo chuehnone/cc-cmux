@@ -205,3 +205,10 @@ test("沒有任何 7 天資料時顯示一列 7d 無資料", () => {
   const s = loadSidebar("services", { workspaces: [ws("w1", "api", [tab("t1", "server", "s1", [8080])])], clock: { epoch: NOW } });
   assert.deepEqual(s.usage(), [{ text: "7d 無資料", color: "tertiary" }]);
 });
+
+test("已過重置時間時顯示已重置，等待更新", () => {
+  const s = loadSidebar("services", { workspaces: [usageWs("w1", "personal", -5, 90)], clock: { epoch: NOW } });
+  assert.deepEqual(s.usage().map((u) => u.text), ["個人 7d 已重置，等待更新"]);
+  const edge = loadSidebar("services", { workspaces: [usageWs("w1", "personal", 0, 90)], clock: { epoch: NOW } });
+  assert.deepEqual(edge.usage().map((u) => u.text), ["個人 7d 已重置，等待更新"]);
+});
