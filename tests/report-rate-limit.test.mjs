@@ -55,3 +55,10 @@ test("沒有 seven_day 時不執行 cmux，exit 0", { timeout: 5000 }, async () 
   assert.equal(r.code, 0);
   assert.deepEqual(fake.calls(), []);
 });
+
+test("沒有 CMUX_WORKSPACE_ID 時不執行 cmux，exit 0", { timeout: 5000 }, async () => {
+  const fake = fakeCmux();
+  const r = await runWriter(sevenDay(78), {}, fake);
+  assert.equal(r.code, 0);
+  assert.deepEqual(fake.calls(), []);
+});
