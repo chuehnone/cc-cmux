@@ -70,6 +70,29 @@
 | stdin 不是 JSON | 不印 stdout，exit 0。 |
 | `cmux` 卡住 | 1 秒內結束，exit 0。 |
 | cmux 在背景 | 不處理。實跑記錄結果，寫進 README 已知限制。 |
+| 個人與公司帳號的 Claude 開在同一個 workspace | 不處理。後寫入的帳號蓋掉先寫入的，面板只看得到最後寫入的帳號。寫進 README 已知限制。 |
+
+## 資料流範例
+
+範例的值：`resets_at` 是 1793880000，寫入時間是 1793630000，面板的 `clock.epoch` 是 1793630060。公司帳號的 `resets_at` 是 1793653200。`R`、`W` 代表任意的 `resets_at` 與寫入時間。
+
+| 情況 | 來源的值（statusline JSON 與環境變數） | 寫入的指令 | cmux 存的值（sidebar-state） | 面板讀哪個欄位 | 畫面文字 |
+|------|----------------------------------------|------------|------------------------------|----------------|----------|
+| 正常（個人） | `seven_day: {used_percentage: 78, resets_at: 1793880000}`，沒有 `CLAUDE_CONFIG_DIR` | `cmux set-progress 0.78 --label cc-cmux:7d:personal:1793880000:1793630000:78 --workspace <CMUX_WORKSPACE_ID>` | `progress=0.78 cc-cmux:7d:personal:1793880000:1793630000:78` | label 第 4 欄 `resets_at`、第 6 欄已用% | `個人 7d 剩 2 天 21 小時 · 已用 78%`，`secondary` |
+| 公司帳號 | `used_percentage: 2, resets_at: 1793653200`，`CLAUDE_CONFIG_DIR` 以 `.claude-work` 結尾 | `cmux set-progress 0.02 --label cc-cmux:7d:work:1793653200:1793630000:2 --workspace <CMUX_WORKSPACE_ID>` | `progress=0.02 cc-cmux:7d:work:1793653200:1793630000:2` | label 第 3 欄 `work` | `公司 7d 剩 6 小時 25 分 · 已用 2%`，排在個人下面 |
+| 已用 ≥ 85% | `used_percentage: 84.6` | `cmux set-progress 0.846 --label cc-cmux:7d:personal:R:W:84.6 ...` | `progress=0.846 cc-cmux:7d:personal:R:W:84.6` | label 第 6 欄，四捨五入成 85 | `已用 85%`，`#FF453A` |
+| 已用超過 100% | `used_percentage: 120` | `cmux set-progress 1 --label cc-cmux:7d:personal:R:W:120 ...` | `progress=1 cc-cmux:7d:personal:R:W:120` | label 第 6 欄 120，不讀 `progress.value` | `已用 120%`，`#FF453A` |
+| 沒有 `seven_day` | `rate_limits` 只有 `five_hour`，或沒有 `rate_limits` | 不經過：寫入程式直接 exit 0 | 保留上一次的值 | 依舊值的 label | 依舊值計算；過了 `resets_at` 就顯示 `已重置，等待更新` |
+| 已過重置時間 | 沒有新的寫入 | 不經過 | `progress=... cc-cmux:7d:personal:1793630000:W:90` | label 第 4 欄 ≤ `clock.epoch` | `個人 7d 已重置，等待更新`，`secondary` |
+| 同一個帳號在兩個 workspace 有值 | 兩個個人 session 各自送出 | 各寫進自己的 workspace | workspace A `...:personal:R:1793630010:50`、workspace B `...:personal:R:1793629900:40` | 比較 label 第 5 欄，取較大的 | `已用 50%` |
+| 個人與公司帳號在同一個 workspace | 兩個 session 都有 `CMUX_WORKSPACE_ID` = 同一個 workspace | 兩次 `set-progress --workspace <同一個>` | 只剩後寫入的那一筆 | 只有一筆 label | 只有後寫入的帳號那一列 |
+| label 格式錯或不是 cc-cmux | 別的工具執行 `cmux set-progress 0.5 --label Building...` | 不經過寫入程式 | `progress=0.5 Building...` | 開頭不是 `cc-cmux:7d:`，略過 | 不畫這一筆 |
+| 別的工具覆蓋了 progress | 同上 | 同上 | 蓋掉 cc-cmux 的值 | 這個 workspace 沒有 cc-cmux 的 label | 該帳號的列消失；下次 statusline 執行時寫回 |
+| 有值的 workspace 都關掉 | 沒有 | 不經過 | 沒有任何 `cc-cmux:7d:` 的 progress | 找不到任何一筆 | `7d 無資料`，`tertiary` |
+| 不在 cmux 裡 | 沒有 `CMUX_WORKSPACE_ID` | 不經過：寫入程式直接 exit 0 | 不變 | 不變 | 不變 |
+| stdin 不是 JSON | `not json` | 不經過：exit 0，不印 stdout | 不變 | 不變 | 不變 |
+| cmux 卡住 | 正常的 JSON | `cmux set-progress ...` 不回應，寫入程式 1 秒後 exit 0 | 不確定有沒有寫入 | 依實際存的值 | 依實際存的值 |
+| cmux 在背景 | 正常的 JSON | 同正常 | 同正常 | 同正常 | 2026-11-02 實跑：寫入後 5 秒內更新 |
 
 ## 改動範圍
 

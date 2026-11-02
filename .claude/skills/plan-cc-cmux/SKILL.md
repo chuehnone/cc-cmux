@@ -81,8 +81,9 @@ description: 用一次一題的拷問式訪談，規劃 cc-cmux 的新功能或�
 1. 複製 `spec-template.md`，寫成 `specs/<功能>.md`。檔名用小寫英文加連字號，例如 `specs/services-agent-ports.md`。
 2. 複製 `.claude/skills/verify-cc-cmux/features/_TEMPLATE.md`，寫成 `.claude/skills/verify-cc-cmux/features/<功能>.md`。在 `features/README.md` 的功能表加一列，實跑狀態寫「未實跑」。
 3. 兩個檔案互相對應：spec 的「驗收」寫 features 檔的 sub-feature ID；features 檔的 Drive 對應 spec 的成功條件。
-4. 檢查 spec 的「未決問題」是空的。不是空的，就回到訪談。
-5. 給使用者看兩個檔案的重點，確認後依 repo 規則 commit。這個 repo 直接在 main commit。
+4. 照模板填「資料流範例」：「邊界情況」的每一列，都用具體的值從來源走到畫面。有一格填不出來，就回到訪談。
+5. 檢查 spec 的「未決問題」是空的。不是空的，就回到訪談。
+6. 給使用者看兩個檔案的重點，確認後依 repo 規則 commit。這個 repo 直接在 main commit。
 
 ## 5. 交接
 
@@ -92,6 +93,4 @@ description: 用一次一題的拷問式訪談，規劃 cc-cmux 的新功能或�
 
 - repo 是 public。spec 裡不要寫本機絕對路徑、帳號名稱、公司名稱、截圖或終端機內容。
 - 成功條件寫不出可觀察的狀態時，代表需求還不清楚。繼續問，不要用模糊的字眼帶過。
-- 後面的決策用到前面定好的資料格式時（例如 label、欄位），先把格式逐欄列出，確認新規則還成立，再寫建議。寫 spec 時，把「邊界情況」每一列對照「決策」表的資料格式再查一次。
-  理由：2026-11-02 規劃 claude-rate-limit 時，label 格式沒有已用百分比，邊界情況卻寫「label 用原始值」。實作到第 5 輪才發現。
 - 這個 skill 只負責規劃。使用者在訪談中要求直接改程式時，先問是否要結束規劃。

@@ -140,6 +140,7 @@ git config core.hooksPath .githooks
 | 規則 | 由誰檢查 |
 |------|----------|
 | 程式（`.js` `.mjs` `.cjs` `.ts`）不要有註解 | `.githooks/pre-commit` 執行 `scripts/check-no-comments.mjs --staged` |
+| `specs/*.md` 有模板的每一節、沒有留下模板原文、「未決問題」是空的 | `.githooks/pre-commit` 執行 `scripts/check-spec.mjs --staged` |
 
 要說明程式的用途或理由時，寫進 README。
 

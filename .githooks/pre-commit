@@ -1,2 +1,4 @@
 #!/bin/sh
-exec node "$(git rev-parse --show-toplevel)/scripts/check-no-comments.mjs" --staged
+ROOT="$(git rev-parse --show-toplevel)"
+node "$ROOT/scripts/check-no-comments.mjs" --staged || exit 1
+exec node "$ROOT/scripts/check-spec.mjs" --staged
