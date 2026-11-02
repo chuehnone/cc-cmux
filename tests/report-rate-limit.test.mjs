@@ -38,7 +38,7 @@ test("有 7 天資料且在 cmux 裡時，用 set-progress 寫入個人帳號的
   assert.equal(r.stdout, "");
   const calls = fake.calls();
   assert.equal(calls.length, 1);
-  const m = calls[0].match(/^set-progress 0\.78 --label cc-cmux:7d:personal:1900000000:(\d+) --workspace W1$/);
+  const m = calls[0].match(/^set-progress 0\.78 --label cc-cmux:7d:personal:1900000000:(\d+):78 --workspace W1$/);
   assert.ok(m, "實際呼叫：" + calls[0]);
   assert.ok(Number(m[1]) >= before && Number(m[1]) <= after);
 });
@@ -46,7 +46,7 @@ test("有 7 天資料且在 cmux 裡時，用 set-progress 寫入個人帳號的
 test("CLAUDE_CONFIG_DIR 以 .claude-work 結尾時，帳號記成 work", { timeout: 5000 }, async () => {
   const fake = fakeCmux();
   await runWriter(sevenDay(31), { CMUX_WORKSPACE_ID: "W1", CLAUDE_CONFIG_DIR: "/home/u/.claude-work" }, fake);
-  assert.match(fake.calls()[0] ?? "", / --label cc-cmux:7d:work:1900000000:\d+ /);
+  assert.match(fake.calls()[0] ?? "", / --label cc-cmux:7d:work:1900000000:\d+:31 /);
 });
 
 test("沒有 seven_day 時不執行 cmux，exit 0", { timeout: 5000 }, async () => {
@@ -61,4 +61,10 @@ test("沒有 CMUX_WORKSPACE_ID 時不執行 cmux，exit 0", { timeout: 5000 }, a
   const r = await runWriter(sevenDay(78), {}, fake);
   assert.equal(r.code, 0);
   assert.deepEqual(fake.calls(), []);
+});
+
+test("已用 120% 時進度值夾成 1，label 保留 120", { timeout: 5000 }, async () => {
+  const fake = fakeCmux();
+  await runWriter(sevenDay(120), { CMUX_WORKSPACE_ID: "W1" }, fake);
+  assert.match(fake.calls()[0] ?? "", /^set-progress 1 --label cc-cmux:7d:personal:1900000000:\d+:120 --workspace W1$/);
 });
