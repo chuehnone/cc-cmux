@@ -55,7 +55,7 @@ const usageRows = () => {
     latest[account] = { account, resetsAt: Number(resetsAt), writtenAt: Number(writtenAt), pct: Number(pct) };
   }
   const now = data.clock()?.epoch ?? 0;
-  return Object.values(latest).map((u) => {
+  return Object.keys(ACCOUNT_NAMES).filter((a) => latest[a]).map((a) => latest[a]).map((u) => {
     const pct = Math.round(u.pct);
     return {
       account: u.account,

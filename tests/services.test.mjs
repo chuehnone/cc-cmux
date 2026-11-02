@@ -171,3 +171,8 @@ test("四捨五入後已用 85% 以上變紅，84% 維持灰色", () => {
   const gray = loadSidebar("services", { workspaces: [usageWs("w1", "personal", DAY, 84.4)], clock: { epoch: NOW } });
   assert.deepEqual(gray.usage(), [{ text: "個人 7d 剩 1 天 0 小時 · 已用 84%", color: "secondary" }]);
 });
+
+test("兩個帳號都有值時，個人在上、公司在下", () => {
+  const s = loadSidebar("services", { workspaces: [usageWs("w1", "work", DAY, 31), usageWs("w2", "personal", DAY, 78)], clock: { epoch: NOW } });
+  assert.deepEqual(s.usage().map((u) => u.text.slice(0, 2)), ["個人", "公司"]);
+});
