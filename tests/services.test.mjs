@@ -364,3 +364,10 @@ test("agent 的 panelId 與 surfaceId 都對不到分頁時，照舊可以停止
   assert.equal(row.dot, "#34C759");
   assert.deepEqual(s.tap(8080, "stop.circle").at(-1), { fn: "cmux", method: "surface.send_key", params: { surface_id: "p1", key: "ctrl+c" } });
 });
+
+test("ended 的 agent 綁在分頁上時仍上鎖", () => {
+  const s = loadSidebar("services", {
+    workspaces: [ws("w1", "api", [tab("p1", "claude", "p1", [8080])], [{ panelId: "p1", surfaceId: "x1", status: "ended" }])],
+  });
+  assert.ok(s.rows()[0].buttons.some((b) => b.symbol === "lock"));
+});
