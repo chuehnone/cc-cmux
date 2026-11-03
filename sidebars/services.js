@@ -110,7 +110,10 @@ const waitingItems = () => {
     }
   }
   out.sort((x, y) => x.rank - y.rank || x.since - y.since);
-  return out.length ? [{ key: "header", kind: "header" }, ...out] : out;
+  if (out.length === 0) return out;
+  const shown = out.slice(0, 10);
+  const more = out.length > 10 ? [{ key: "more", kind: "more", text: "還有 " + (out.length - 10) + " 個" }] : [];
+  return [{ key: "header", kind: "header" }, ...shown, ...more];
 };
 
 function iconButton(symbol, color, action) {
@@ -137,6 +140,8 @@ sidebar(() =>
       (i) =>
         i().kind === "header"
           ? Text("等你").font(11).weight("semibold").color("secondary").paddingHorizontal(10)
+          : i().kind === "more"
+          ? Text(() => i().text).font(10).color("tertiary").paddingHorizontal(10)
           : HStack({ spacing: 6 }, [
           Circle({ size: 6 }).fill(() => i().dot),
           Text(() => i().text).font(11).lineLimit(1).truncation("middle"),

@@ -326,3 +326,15 @@ test("同一個分頁有兩筆 session 時，只顯示 lastActivityAt 較新的�
   });
   assert.deepEqual(s.waiting().map((w) => w.texts.slice(1).join(" ")), ["跑完 8 分"]);
 });
+
+test("超過 10 個在等時顯示 10 列，加一行還有 N 個", () => {
+  const agents = [];
+  const tabs = [];
+  for (let k = 1; k <= 12; k++) {
+    agents.push(agent("needs_input", "P" + k, { sinceEpoch: T - k * 60 }));
+    tabs.push(wtab("P" + k, "t" + k));
+  }
+  const s = loadSidebar("services", { workspaces: [waitWs(agents, tabs)], clock: { epoch: T } });
+  assert.equal(s.waiting().length, 10);
+  assert.ok(s.texts().includes("還有 2 個"));
+});
