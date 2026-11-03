@@ -138,7 +138,9 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 - 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
 - 等你區只看得到同一個 window 的 session。
 - 分頁上任何未讀通知，都會讓閒置的 Claude 顯示成 `跑完`，不只 Claude 的通知。
-- 回合結束約 1 分鐘後，Claude 會送出閒置提醒。提醒送到前就去看的話，提醒送到後那一列會再出現一次。
+- 回合結束約 1 分鐘後，Claude 會送出閒置提醒。提醒送到前看過、又切到別的分頁的話，提醒送到後那一列可能再出現一次（未驗證）。看過後一直停在那個分頁時，不會再出現（2026-11-03 實跑）。
+- 等你區的列要在 cmux 是前景 app 時按下，通知才會變成已讀。cmux 在背景時切到那個分頁，通知仍是未讀，那一列不會消失（2026-11-03 實跑）。
+- Claude 行程被強制結束、沒送 Stop 時，cmux 在 10 秒內把它改成 `ended`，那一列消失（2026-11-03 實跑）。
 - `跑完` 的等待時間從閒置提醒起算，比實際跑完的時間少約 1 分鐘。原因是閒置提醒會更新 agent 的 `lastActivityAt`。
 - 7d 列只看得到同一個 window 的 workspace。Claude 在別的 window 時，這個 window 的面板看不到它的額度。
 - 有 Claude 的 workspace，左側欄會多一條進度條，label 是 `cc-cmux:7d:...`。

@@ -32,7 +32,19 @@ Preconditions:
 ## Gotchas
 
 - `ccv wait-start` 的 workspace 要用 `--focus false` 開。切過去的話，通知會直接變成已讀，`跑完` 列不會出現。
-- 回合結束約 60 秒後，Claude 會送出閒置提醒。60 秒內按下去的話，提醒送到後那一列會再出現一次。判定 `wait-focus` 時，只看按下後 5 秒內是否消失。
+- 回合結束約 60 秒後，Claude 會送出閒置提醒，並更新 agent 的 `lastActivityAt`。按下後一直停在那個分頁時，提醒直接算已讀，那一列不會再出現。判定 `wait-focus` 時，只看按下後 5 秒內是否消失。
 - 「等你」區只看得到同一個 window 的 session。使用者自己 window 裡的 Claude 不會出現在測試 window。
 - `wait-start` 會用到 token。
 - 本機權限模式是 `auto`，不容易觸發權限詢問。所以 `question` 改用 AskUserQuestion 觸發 `needs_input`。
+- agent 的 `surfaceId` 對不到分頁，要用 `panelId` 對 `tabs[].id`。cmux 文件寫的和實際不同。用 `ccv probe` 可以看到真實的值。
+- cmux 不在前景時按下 `跑完` 列，workspace 會切過去，但通知仍是未讀，那一列不會消失。結果不算數（run `20261103T150707-uxg3` 就是這樣）。
+- `wait-start` 進行中，不要操作測試 window。在 AskUserQuestion 畫面打字會讓問題被回答，`question` 列就不見了。
+- 螢幕鎖定時（前景是 `loginwindow`），AX 讀不到面板，`wait-rows`、`probe` 都回傳空的。解鎖後重跑。
+- 鎖定再解鎖後，有一次 agent 的 `status` 從 `needs_input` 變成 `working`，但畫面上問題還在，cmux 的狀態列也還是 `Needs input`。原因未查證，只遇過一次（run `20261103T142538-3q51`）。
+- 2026-11-03 實跑結果（cmux 在前景）：
+  - `wait-question` PASS：問題列、橘點、分頁名稱正確（run `20261103T151233-aopj`）。
+  - `wait-done` PASS：跑完列、藍點，排在問題列後面（同一個 run）。
+  - `wait-focus` PASS：跑完後 6 秒按下，1.2 秒內消失，75 秒時沒有再出現（同一個 run）；跑完後 70 秒按下，1.2 秒內消失，之後 30 秒沒有再出現（run `20261103T150900-t4e6`）。
+  - `wait-crash`（只記錄）：SIGKILL 後 10 秒內 `status` 變成 `ended`，那一列消失（run `20261103T151104-dizc`）。
+  - 回歸 install、list、stop、`usage-row` PASS（run `20261103T151441-q17e`）。
+- 未驗證：看過跑完列後 60 秒內切到別的分頁，閒置提醒送到時那一列會不會再出現。
