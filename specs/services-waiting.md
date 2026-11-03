@@ -8,8 +8,9 @@
 
 ## How（現在怎麼做）
 
-- sidebar 的 `workspaces[i].agents` 依 session 列出 coding agent。同一個 workspace 有多個 Claude 時，每個 session 都會出現，並綁到所在分頁的 `surfaceId`。綁定的分頁不在時，排除這筆 session。沒有分頁綁定的 session，改用存下的 workspace id 判斷歸屬。每個 workspace 最多 24 筆，超過時丟掉最舊的（cmux 原始碼 `Sources/Workspace+CustomSidebarSnapshot.swift`）。
-- `agents[j]` 一定有 `id`、`kind`、`name`、`status`、`lastActivityAt`。`surfaceId`、`sinceEpoch`、`title` 只有在 cmux 知道時才有（`cmux docs sidebars`）。
+- sidebar 的 `workspaces[i].agents` 依 session 列出 coding agent。同一個 workspace 有多個 Claude 時，每個 session 都會出現，並綁到所在分頁。綁定的分頁不在時，排除這筆 session。沒有分頁綁定的 session，改用存下的 workspace id 判斷歸屬。每個 workspace 最多 24 筆，超過時丟掉最舊的（cmux 原始碼 `Sources/Workspace+CustomSidebarSnapshot.swift`）。
+- `agents[j]` 一定有 `id`、`kind`、`name`、`status`、`lastActivityAt`。`panelId`、`surfaceId`、`sinceEpoch`、`title` 只有在 cmux 知道時才有（`cmux docs sidebars`）。
+- 文件寫 agent 的 `surfaceId` 等於分頁的 `tabs[k].surfaceId`，實際不是。2026-11-03 用暫時的探查 sidebar 讀 cmux 0.65.2 的真實資料：agent 的 `panelId` 等於分頁的 `id`，也等於分頁的 `surfaceId`；agent 的 `surfaceId` 是另一個值，對不到任何分頁。
 - `status` 的變化（cmux 原始碼 `Sources/Mobile/AgentChat/AgentChatSessionRegistry+Lifecycle.swift`）：
   - `needs_input`：Claude 呼叫 AskUserQuestion、ExitPlanMode，要求權限，或送出一般通知。
   - 閒置提醒不改變狀態。
@@ -35,6 +36,7 @@
 | 排序 | `問題` 在前；同一種依等待時間由長到短 | 卡住的先處理，等最久的先處理。 |
 | 等待時間的來源 | `問題` 用 `sinceEpoch`，缺值時用 `lastActivityAt`；`跑完` 用 `lastActivityAt` | `idle` 沒有 `sinceEpoch`。 |
 | 時間格式 | `剛剛`、`N 分`、`N 小時`、`N 天`，無條件捨去；另寫函式，不改 `formatLeft` | 和 7d 列格式不同，不動已驗證的行為。 |
+| 對應分頁的方式 | agent 的 `panelId` 對 `tabs[k].id`；點擊送該分頁的 `surfaceId` | 實作時用探查 sidebar 實測，agent 的 `surfaceId` 對不到分頁。原本的寫法照文件，分頁名稱會永遠是 `分頁不明`。 |
 | 缺分頁 | 分頁名稱寫 `分頁不明`，點擊送 `workspace.select` | 卡住的 session 寧可多顯示，不要漏掉。 |
 | 其他 agent | 一起顯示，不標種類 | 使用者目前只用 Claude。 |
 | 列數上限 | 最多 10 列，超過時加一行 `還有 N 個` | 16 個 session 全部在等時，會把 port 列推出畫面。 |
@@ -47,7 +49,7 @@
 3. `working`、`hasUnread` 是 false 的 `idle`、`ended` 都不顯示。
 4. 等待時間依 `data.clock().epoch` 計算，無條件捨去：不到 1 分鐘 `剛剛`，不到 1 小時 `N 分`，不到 1 天 `N 小時`，其他 `N 天`。
 5. `問題` 在前，`跑完` 在後；同一種依等待時間由長到短。
-6. 按一下整列，送出 `cmux("surface.focus", { surface_id: <agent 的 surfaceId>, workspace_id: <workspace id> })`。
+6. 按一下整列，送出 `cmux("surface.focus", { surface_id: <對應分頁的 surfaceId>, workspace_id: <workspace id> })`。對應分頁是 `id` 等於 agent `panelId` 的那一個。
 7. 沒有任何一列時，`等你` 標題與整區都不顯示。
 8. 實跑：按下 `跑完` 那一列後，cmux 切到那個分頁，該列在 5 秒內消失。
 9. 現有的 7d 列、port 列與按鈕行為不變。
@@ -62,7 +64,7 @@
 | 分頁有非 Claude 的未讀通知，Claude 是 `idle` | 照樣顯示成 `跑完`。寫進已知限制。 |
 | 60 秒內就去看，之後閒置提醒才送到 | 那一列消失後會再出現一次。寫進已知限制。實跑記錄兩種時間點。 |
 | Claude 行程沒送 Stop 就結束 | 不處理。實跑記錄結果，寫進已知限制。 |
-| agent 沒有 `surfaceId`，或 `tabs` 找不到對應分頁 | 分頁名稱寫 `分頁不明`，點擊送 `workspace.select`。 |
+| agent 沒有 `panelId`，或 `tabs` 找不到對應分頁 | 分頁名稱寫 `分頁不明`，點擊送 `workspace.select`。 |
 | `needs_input` 沒有 `sinceEpoch` | 改用 `lastActivityAt`。 |
 | 時間比 `clock.epoch` 晚 | 顯示 `剛剛`。 |
 | workspace 或分頁名稱很長 | 單行，中間截斷。 |
@@ -70,22 +72,22 @@
 
 ## 資料流範例
 
-範例的值：面板的 `clock.epoch` 是 1793700000。workspace `Raphael`（id `W1`）有分頁 `Raphael-PR`（`surfaceId` `S1`）與 `Raphael-PB`（`S2`）。
+範例的值：面板的 `clock.epoch` 是 1793700000。workspace `Raphael`（id `W1`）有分頁 `Raphael-PR`（`id` 與 `surfaceId` 都是 `P1`）與 `Raphael-PB`（`P2`）。agent 的 `surfaceId` 是另一組值（`X1`、`X2`），對不到分頁。這些值的關係在 2026-11-03 用探查 sidebar 實測過。
 
 | 情況 | 來源（Claude 的事件與 cmux 通知） | cmux 存的值 | 面板讀哪些欄位 | 畫面文字 | 點擊送出的呼叫 |
 |------|-----------------------------------|-------------|----------------|----------|----------------|
-| 正常：問題 | `S1` 的 Claude 呼叫 AskUserQuestion，時間 1793699820 | `agents: [{status: "needs_input", surfaceId: "S1", sinceEpoch: 1793699820}]` | `status`、`surfaceId` 對到 `tabs` 的 `Raphael-PR`、`sinceEpoch` | `● Raphael · Raphael-PR　問題　3 分`，橘點 | `surface.focus { surface_id: "S1", workspace_id: "W1" }` |
-| 正常：跑完 | `S2` 的 Claude 回合結束（Stop），時間 1793699280；「Completed」通知未讀 | `agents: [{status: "idle", surfaceId: "S2", lastActivityAt: 1793699280}]`，`tabs[S2].hasUnread: true` | `status`、`hasUnread`、`lastActivityAt` | `● Raphael · Raphael-PB　跑完　12 分`，藍點 | `surface.focus { surface_id: "S2", workspace_id: "W1" }` |
-| 按下跑完之後 | 切到 `S2`，通知變成已讀 | `tabs[S2].hasUnread: false` | `hasUnread` | 這一列消失 | 不經過 |
-| 60 秒內看完，閒置提醒才到 | 第 60 秒送到閒置提醒，未讀；`status` 仍是 `idle` | `tabs[S2].hasUnread: true` | `hasUnread` | 這一列再出現一次 | 同正常：跑完 |
-| working | `S1` 的 Claude 執行工具 | `status: "working"` | `status` | 不顯示 | 不經過 |
-| ended | `S1` 的 Claude 結束 | `status: "ended"` | `status` | 不顯示 | 不經過 |
+| 正常：問題 | `P1` 的 Claude 呼叫 AskUserQuestion，時間 1793699820 | `agents: [{status: "needs_input", panelId: "P1", surfaceId: "X1", sinceEpoch: 1793699820}]` | `status`、`panelId` 對到 `tabs` 的 `Raphael-PR`、`sinceEpoch` | `● Raphael · Raphael-PR　問題　3 分`，橘點 | `surface.focus { surface_id: "P1", workspace_id: "W1" }` |
+| 正常：跑完 | `P2` 的 Claude 回合結束（Stop），時間 1793699280；「Completed」通知未讀 | `agents: [{status: "idle", panelId: "P2", surfaceId: "X2", lastActivityAt: 1793699280}]`，`tabs[P2].hasUnread: true` | `status`、`hasUnread`、`lastActivityAt` | `● Raphael · Raphael-PB　跑完　12 分`，藍點 | `surface.focus { surface_id: "P2", workspace_id: "W1" }` |
+| 按下跑完之後 | 切到 `P2`，通知變成已讀 | `tabs[P2].hasUnread: false` | `hasUnread` | 這一列消失 | 不經過 |
+| 60 秒內看完，閒置提醒才到 | 第 60 秒送到閒置提醒，未讀；`status` 仍是 `idle` | `tabs[P2].hasUnread: true` | `hasUnread` | 這一列再出現一次 | 同正常：跑完 |
+| working | `P1` 的 Claude 執行工具 | `status: "working"` | `status` | 不顯示 | 不經過 |
+| ended | `P1` 的 Claude 結束 | `status: "ended"` | `status` | 不顯示 | 不經過 |
 | 超過 10 個 | 12 個 session 都是 `needs_input` | 12 筆 agent | 排序後取前 10 | 10 列，加一行 `還有 2 個` | 每列各自的 `surface.focus` |
-| 同一個分頁兩筆 | `S1` 先後啟動兩次 Claude，都不是 `ended` | 兩筆 `surfaceId: "S1"`，`lastActivityAt` 分別是 1793699000、1793699500 | 取 `lastActivityAt` 較大的一筆 | 只有一列，依 1793699500 那筆的狀態 | 同該筆 |
-| 正在看的分頁是問題 | 使用者停在 `S1`；通知被標成已讀 | `status: "needs_input"`，`hasUnread: false` | `status` | 照樣顯示 `問題` | 同正常：問題 |
-| 非 Claude 的未讀 | `cmux notify --surface S2` 送出其他通知；Claude 是 `idle` | `status: "idle"`，`hasUnread: true` | `status`、`hasUnread` | 顯示成 `跑完` | 同正常：跑完 |
-| Claude 沒送 Stop 就結束 | `S1` 的 Claude 被 SIGKILL | 未查證，實跑記錄 | 依實際的值 | 依實際的值 | 依實際的值 |
-| 缺分頁 | agent 沒有 `surfaceId`，或 `S9` 不在 `tabs` | `agents: [{status: "needs_input", surfaceId: "S9"}]` | `tabs` 找不到 `S9` | `● Raphael · 分頁不明　問題　3 分` | `workspace.select { workspace_id: "W1" }` |
+| 同一個分頁兩筆 | `P1` 先後啟動兩次 Claude，都不是 `ended` | 兩筆 `panelId: "P1"`，`lastActivityAt` 分別是 1793699000、1793699500 | 取 `lastActivityAt` 較大的一筆 | 只有一列，依 1793699500 那筆的狀態 | 同該筆 |
+| 正在看的分頁是問題 | 使用者停在 `P1`；通知被標成已讀 | `status: "needs_input"`，`hasUnread: false` | `status` | 照樣顯示 `問題` | 同正常：問題 |
+| 非 Claude 的未讀 | `cmux notify --surface P2` 送出其他通知；Claude 是 `idle` | `status: "idle"`，`hasUnread: true` | `status`、`hasUnread` | 顯示成 `跑完` | 同正常：跑完 |
+| Claude 沒送 Stop 就結束 | `P1` 的 Claude 被 SIGKILL | 未查證，實跑記錄 | 依實際的值 | 依實際的值 | 依實際的值 |
+| 缺分頁 | agent 沒有 `panelId`，或 `P9` 不在 `tabs` | `agents: [{status: "needs_input", panelId: "P9"}]` | `tabs` 找不到 `P9` | `● Raphael · 分頁不明　問題　3 分` | `workspace.select { workspace_id: "W1" }` |
 | 缺 sinceEpoch | `needs_input`，沒有 `sinceEpoch`，`lastActivityAt` 1793699820 | `agents: [{status: "needs_input", lastActivityAt: 1793699820}]` | `lastActivityAt` | `問題　3 分` | 同正常：問題 |
 | 時間在未來 | `sinceEpoch` 1793700030 | `sinceEpoch: 1793700030` | `sinceEpoch` 大於 `clock.epoch` | `問題　剛剛` | 同正常：問題 |
 | 名稱很長 | 分頁名稱 `這是一個超過面板寬度的很長的分頁名稱` | `tabs[k].title` | `title` | 單行，中間截斷 | 同正常 |
@@ -99,7 +101,8 @@
 | `tests/harness.mjs` | 加 `waiting()`：找出含 `問題` 或 `跑完` 的列，回傳文字、圓點顏色與點擊動作；另回傳 `還有 N 個` 這一行。 |
 | `tests/services.test.mjs` | 加「等你」區的測試。 |
 | `README.md` | 功能說明與已知限制。 |
-| `.claude/skills/verify-cc-cmux/scripts/ccv.mjs` | `wait-start`、`wait-rows`、`click-row`、`wait-kill`；`capture` 加記「等你」區與未讀通知。 |
+| `.claude/skills/verify-cc-cmux/scripts/ccv.mjs` | `wait-start`、`wait-rows`、`click-row`、`wait-kill`、`probe`；`capture` 加記「等你」區與未讀通知。 |
+| `.claude/skills/plan-cc-cmux/spec-template.md` | 資料流範例的說明加一條：「cmux 存的值」要先用 `ccv probe` 讀真實資料再填。 |
 
 不改的檔案與理由：
 
@@ -122,8 +125,8 @@ README 的已知限制要加：
 3. `working`、`hasUnread` 是 false 的 `idle`、`ended` → 沒有列。
 4. 時間格式：差 59 秒 `剛剛`、差 3599 秒 `59 分`、差 3600 秒 `1 小時`、差 86400 秒 `1 天`；時間比 `clock.epoch` 晚 30 秒時 `剛剛`。
 5. 排序：一個 `跑完` 等 20 分、一個 `問題` 等 1 分、一個 `問題` 等 5 分 → 依序是 `問題 5 分`、`問題 1 分`、`跑完 20 分`。
-6. 點一下 → 送出 `surface.focus`，參數 `{ surface_id: "S1", workspace_id: "W1" }`。
-7. agent 沒有 `surfaceId`，或 `surfaceId` 不在 `tabs` → `分頁不明`，點一下送 `workspace.select { workspace_id: "W1" }`。
+6. 點一下 → 送出 `surface.focus`，參數 `{ surface_id: "P1", workspace_id: "W1" }`。分頁用 agent 的 `panelId` 找，agent 的 `surfaceId` 是對不到分頁的另一個值。
+7. agent 沒有 `panelId`，或 `panelId` 不在 `tabs` → `分頁不明`，點一下送 `workspace.select { workspace_id: "W1" }`。
 8. `needs_input` 沒有 `sinceEpoch` → 用 `lastActivityAt` 算時間。
 9. 同一個分頁兩筆非 `ended` 的 session → 只顯示 `lastActivityAt` 較新的一筆。
 10. 12 個 `needs_input` → 10 列，加一行 `還有 2 個`。
@@ -144,6 +147,7 @@ README 的已知限制要加：
 2. `ccv wait-rows`：列出「等你」區每一列的文字，由上到下。`ccv capture` 也加記這些列，以及本次 run 各分頁的未讀通知。
 3. `ccv click-row <文字>`：用 AX 找到包含這段文字的列，點列的中央。沿用 `ccv click` 的倍率檢查。點完記錄 `cmux tree` 的選取分頁。
 4. `ccv wait-kill`：用 SIGKILL 結束 `wait-start` 記錄的 Claude 行程。只結束本次 run 啟動的行程。
+5. `ccv probe`：在本次 run 的 window 暫時放一個探查 sidebar，印出有 agent 的 workspace 的 agent 與分頁欄位，讀完就刪掉並切回 services。規劃與驗證時，用它取得 cmux 實際給的值。
 
 ## 不做的事
 
