@@ -259,3 +259,15 @@ test("working、已讀的 idle、ended 都不顯示", () => {
   });
   assert.deepEqual(s.waiting(), []);
 });
+
+test("等待時間：剛剛、N 分、N 小時、N 天，時間在未來時顯示剛剛", () => {
+  const waitFor = (since) => loadSidebar("services", {
+    workspaces: [waitWs([agent("needs_input", "P1", { sinceEpoch: since })], [wtab("P1", "a")])],
+    clock: { epoch: T },
+  }).waiting()[0]?.texts[2];
+  assert.equal(waitFor(T - 59), "剛剛");
+  assert.equal(waitFor(T - 3599), "59 分");
+  assert.equal(waitFor(T - 3600), "1 小時");
+  assert.equal(waitFor(T - 86400), "1 天");
+  assert.equal(waitFor(T + 30), "剛剛");
+});

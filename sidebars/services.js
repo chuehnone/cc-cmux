@@ -70,7 +70,12 @@ const usageRows = () => {
   });
 };
 
-const formatWait = (sec) => Math.floor(sec / 60) + " 分";
+const formatWait = (sec) => {
+  if (!(sec >= 60)) return "剛剛";
+  if (sec < 3600) return Math.floor(sec / 60) + " 分";
+  if (sec < 86400) return Math.floor(sec / 3600) + " 小時";
+  return Math.floor(sec / 86400) + " 天";
+};
 
 const waitingItems = () => {
   const now = data.clock()?.epoch ?? 0;
