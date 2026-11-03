@@ -82,3 +82,6 @@ spec 的「ccv 需要的擴充」不是「無」時，先擴充 `.claude/skills/
 - `~/.config/cmux/sidebars/services.js` 是 symlink，指向這個 repo 的檔案。改 `sidebars/` 會影響使用者正在用的面板。cmux 何時重新載入改過的檔案，還沒驗證過。實作中途的半成品可能出現在使用者的面板上，開始前先告訴使用者。
 - `tests/harness.mjs` 是模擬環境，不是 cmux。單元測試通過，不代表在 cmux 裡能跑。所以第 4 步一定要用 verify-cc-cmux 實跑。
 - harness 只認得 `tests/harness.mjs` 的 `VIEW_TYPES` 列出的 view。modifier（例如 `.font()`）都會被接受，但只記錄 `fill` 和 `color` 的值。用到新的 view，或要檢查其他 modifier 的值時，要擴充 harness，並確認舊測試全過。
+- 跑測試和 commit 分開下指令。先看測試結果全部通過，再 commit。
+- 驗證前確認前景 app 是 cmux：`lsappinfo info -only name $(lsappinfo front)`。前景不是 cmux 時跑出的結果不算數，要重跑。
+- 被 ship-cc-cmux 呼叫時，發現 spec 自相矛盾、和實測不符，或 sub-feature FAIL（不是已知問題）時，停下來回報給 ship-cc-cmux。不要自己改 spec。

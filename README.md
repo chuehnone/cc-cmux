@@ -174,7 +174,13 @@ node --test tests/*.test.mjs
 
 `tests/harness.mjs` 用 Node 的 vm 模擬 cmux 的 sidebar 執行環境。單元測試通過，不代表在 cmux 裡能跑，要再用 `.claude/skills/verify-cc-cmux` 實跑。
 
-開發流程用三個 skill：`plan-cc-cmux` 規劃並產出 `specs/<功能>.md`，`implement-cc-cmux` 照 spec 用 TDD 實作，`verify-cc-cmux` 實際操作面板驗證。
+開發流程用這些 skill：
+
+- `plan-cc-cmux`：規劃並產出 `specs/<功能>.md`。有手動與自動兩種模式。
+- `implement-cc-cmux`：照 spec 用 TDD 實作。
+- `verify-cc-cmux`：實際操作面板驗證。
+- `retro-cc-cmux`：發現錯誤時檢討，改進 skill、模板或 ccv。紀錄在 `.claude/skills/retro-cc-cmux/log.md`。
+- `ship-cc-cmux`：把上面串起來自動跑：規劃、commit、實作、驗證、push。發現錯誤時呼叫 retro，再回到規劃修正。
 
 手動檢查全部檔案沒有註解：
 
