@@ -147,6 +147,7 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 - 一個 workspace 只有一個 `progress`。其他工具呼叫 `set-progress` 時會互相覆蓋。個人帳號與公司帳號的 Claude 開在同一個 workspace 時也會互相覆蓋，面板只看得到最後寫入的帳號。
 - 7d 的已用百分比只在 Claude 有回應時更新。剩餘時間由面板依時鐘計算，不必等新資料。
 - cmux 不在前景時，7d 列一樣會更新。2026-11-02 實跑時，前景是別的 app，寫入後 5 秒內面板就更新了。
+- 分頁裡有 Claude 時，port 列仍顯示綠點和停止按鈕，不是橘點和鎖頭。所以「不送 Ctrl+C」的保護沒有生效。修好前，不要對有 Claude 的分頁按停止。原因是程式用 agent 的 `surfaceId` 比對分頁，實際要用 `panelId`（2026-11-03 實跑發現）。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
 
 ## 維護

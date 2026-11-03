@@ -24,7 +24,11 @@ Preconditions:
 
 - **出現一列。** launch 的就緒條件包含面板 AX 樹有 `:<port>`。執行 `ccv capture list`。`list.txt` 的 `panel row :<port>` 是 `present`。
 - **副標與總數。** 看 `list.png`。這一列的副標以 `verify-svc-<run>` 開頭，標題列的數字至少是 1。
-- **agent 圓點與鎖頭。** 目前沒有驗證方法。ccv 不會在本次 run 的分頁裡啟動 agent。
+- **agent 圓點與鎖頭。** ccv 還沒有對應的指令。2026-11-03 手動實跑一次，結果是 **FAIL**（run `20261103T151820-0cg0`）：
+  - 做法：在本次 run 的 window 開一個 workspace，指令是先用 `&` 在背景啟動 `python3 -I -m http.server <port>`，再在同一個分頁啟動 `claude`。
+  - 結果：`:<port>` 那一列的副標是那個分頁的名稱，但圓點是綠色，按鈕是紅色的停止，不是橘點和鎖頭。
+  - 原因：`ccv probe` 顯示 agent 的 `panelId` 等於分頁的 `id`，agent 的 `surfaceId` 是另一個值。`sidebars/services.js` 用 agent 的 `surfaceId` 比對分頁，永遠對不上。
+  - 注意：用 `&` 啟動的 server 不在 ccv 的紀錄裡，`ccv cleanup` 關掉 window 後它還會留著，要另外停掉。
 - **空狀態。** 先 `ccv click stop`，再看 `ccv check-stop` 的 `PANEL_UPDATE`。PASS 時，本次 run 的 window 沒有其他 port，面板應顯示空狀態。
 
 ## Gotchas
