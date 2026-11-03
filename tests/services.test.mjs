@@ -355,3 +355,12 @@ test("agent 沒有 panelId，但 surfaceId 等於分頁的 surfaceId 時，仍�
   assert.equal(row.dot, "#FF9F0A");
   assert.ok(row.buttons.some((b) => b.symbol === "lock"));
 });
+
+test("agent 的 panelId 與 surfaceId 都對不到分頁時，照舊可以停止", () => {
+  const s = loadSidebar("services", {
+    workspaces: [ws("w1", "api", [tab("p1", "server", "p1", [8080])], [{ panelId: "p9", surfaceId: "x9" }])],
+  });
+  const row = s.rows()[0];
+  assert.equal(row.dot, "#34C759");
+  assert.deepEqual(s.tap(8080, "stop.circle").at(-1), { fn: "cmux", method: "surface.send_key", params: { surface_id: "p1", key: "ctrl+c" } });
+});
