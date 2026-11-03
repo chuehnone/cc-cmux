@@ -79,6 +79,22 @@ cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 work
 
 移除：從 `~/.claude/settings.json` 刪掉這兩筆。已登記的 PID 會在 Claude 結束後由 cmux 清掉。
 
+### 等你區：哪個 Claude session 在等你
+
+7d 列下面有「等你」區，列出在等你的 Claude session。每一列寫出 workspace 與分頁名稱，按一下整列就切到那個分頁。
+
+- `問題`（橘點）：Claude 在問問題、要你核准計畫，或要求權限。
+- `跑完`（藍點）：Claude 跑完一個回合，那個分頁的通知你還沒看。
+- 右邊是等了多久：`剛剛`、`N 分`、`N 小時`、`N 天`。
+- `問題` 排在 `跑完` 前面；同一種依等待時間由長到短。
+- 最多 10 列，超過時最後加一行 `還有 N 個`。
+- 找不到對應的分頁時，分頁名稱寫 `分頁不明`，按下去切到那個 workspace。
+- 沒有任何 session 在等時，整區不顯示。
+
+資料來自 cmux 給 sidebar 的 `agents` 與分頁的 `hasUnread`。分頁用 agent 的 `panelId` 對應。理由：cmux 文件說 agent 的 `surfaceId` 等於分頁的 `surfaceId`，但 2026-11-03 實測 cmux 0.65.2，兩者不同，`panelId` 才等於分頁的 `id`。
+
+不需要另外安裝。
+
 ### 顯示 Claude 7 天額度的剩餘時間（選用）
 
 面板標題列下面顯示 Claude 訂閱 7 天視窗還剩多久重置，以及已用百分比。個人帳號與公司帳號各一列，例如：
@@ -120,6 +136,10 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 - cmux 不是前景 app 時，背景服務不會更新：新的背景服務不出現，或結束的不消失。切回 cmux 後約 2–3 秒內更新。原因是 cmux 在背景時會暫停定期的 agent 掃描。cmux 放在第二個螢幕、但正在用別的 app 時，也是如此。
 - 面板看不出背景服務是哪個 agent 啟動的。
 - 服務結束後，cmux 有時不移除 port，那一列會留著（issue #1）。
+- 等你區只看得到同一個 window 的 session。
+- 分頁上任何未讀通知，都會讓閒置的 Claude 顯示成 `跑完`，不只 Claude 的通知。
+- 回合結束約 1 分鐘後，Claude 會送出閒置提醒。提醒送到前就去看的話，提醒送到後那一列會再出現一次。
+- `跑完` 的等待時間從閒置提醒起算，比實際跑完的時間少約 1 分鐘。原因是閒置提醒會更新 agent 的 `lastActivityAt`。
 - 7d 列只看得到同一個 window 的 workspace。Claude 在別的 window 時，這個 window 的面板看不到它的額度。
 - 有 Claude 的 workspace，左側欄會多一條進度條，label 是 `cc-cmux:7d:...`。
 - 一個 workspace 只有一個 `progress`。其他工具呼叫 `set-progress` 時會互相覆蓋。個人帳號與公司帳號的 Claude 開在同一個 workspace 時也會互相覆蓋，面板只看得到最後寫入的帳號。
