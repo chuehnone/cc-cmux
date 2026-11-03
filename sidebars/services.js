@@ -1,6 +1,7 @@
 const rows = () => {
   const out = [];
   for (const w of data.workspaces() ?? []) {
+    const agentPanels = new Set((w.agents ?? []).map((a) => a.panelId).filter(Boolean));
     const agentSurfaces = new Set((w.agents ?? []).map((a) => a.surfaceId).filter(Boolean));
     for (const t of w.tabs ?? []) {
       for (const p of t.ports ?? []) {
@@ -11,7 +12,7 @@ const rows = () => {
           workspaceTitle: w.title,
           tabTitle: t.title,
           surfaceId: t.surfaceId,
-          hasAgent: agentSurfaces.has(t.surfaceId),
+          hasAgent: agentPanels.has(t.id) || agentSurfaces.has(t.surfaceId),
         });
       }
     }

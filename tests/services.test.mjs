@@ -53,7 +53,7 @@ test("停止按鈕對分頁送 Ctrl+C", () => {
 
 test("分頁有 agent 時顯示橘點與鎖頭，點了不送 Ctrl+C", () => {
   const s = loadSidebar("services", {
-    workspaces: [ws("w1", "api", [tab("t1", "claude", "s1", [8080])], [{ surfaceId: "s1" }])],
+    workspaces: [ws("w1", "api", [tab("p1", "claude", "p1", [8080])], [{ panelId: "p1", surfaceId: "x1" }])],
   });
   const row = s.rows()[0];
   assert.equal(row.dot, "#FF9F0A");
