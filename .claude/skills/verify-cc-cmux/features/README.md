@@ -50,3 +50,4 @@
 | 登記每一個 Claude Code session | [agent-registration.md](./agent-registration.md) | 已實跑（cmux 在前景）：reg-both、reg-control、reg-no-status、reg-cleanup PASS |
 | 顯示 Claude 7 天額度的剩餘時間 | [claude-rate-limit.md](./claude-rate-limit.md) | 已實跑（2026-11-02）：usage-row、usage-red、usage-accounts、usage-live、usage-cleanup PASS |
 | 列出在等使用者的 Claude session | [services-waiting.md](./services-waiting.md) | 已實跑（2026-11-03，cmux 在前景）：wait-question、wait-done、wait-focus PASS；wait-crash 已記錄 |
+| agent 分頁的橘點、鎖頭與背景列跳轉 | [services-agent-tab.md](./services-agent-tab.md) | 未實跑 |
