@@ -248,3 +248,14 @@ test("idle 且分頁有未讀時顯示成跑完列，藍點，從 lastActivityAt
   assert.deepEqual(w[0].texts, ["Raphael · Raphael-PB", "跑完", "12 分"]);
   assert.equal(w[0].dot, "#0A84FF");
 });
+
+test("working、已讀的 idle、ended 都不顯示", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs(
+      [agent("working", "P1", { sinceEpoch: T - 60 }), agent("idle", "P2"), agent("ended", "P3")],
+      [wtab("P1", "a", true), wtab("P2", "b", false), wtab("P3", "c", true)],
+    )],
+    clock: { epoch: T },
+  });
+  assert.deepEqual(s.waiting(), []);
+});
