@@ -27,7 +27,7 @@ Preconditions:
 
 ## Gotchas
 
-- 不要用 `cmux tree` 或 `ccv capture` 的 `tree` 判斷跳轉成功與否。2026-11-03 實測，`cmux tree` 在點擊後至少 14 秒仍回報舊的選取，畫面與事件卻已經切換（run `20261103T160254-p0vh`）。哪些情況會落後，原因未查證。
+- 不要用 `cmux tree` 或 `ccv capture` 的 `tree` 判斷跳轉成功與否。2026-11-03 實測，`cmux tree` 在點擊後至少 14 秒仍回報舊的選取，畫面與事件卻已經切換（run `20261103T160254-p0vh`）。2026-11-04 追查：`ccv launch` 後直接點跳轉，3 次都會落後，不需要 Claude；`current-workspace`、`list-workspaces`、`identify` 也一樣讀到舊值，約 1 分鐘後才更新。根本原因未查出，細節見 `specs/focus-check.md` 的 How。
 - `check-focus` 只看點擊後 5 秒內的事件。
 - `bg-start` 會用到 token。
 - `check-focus` 要從點擊**之前**起算。cmux-cua 的點擊呼叫回傳前後差約 2 秒，從回傳後起算會漏掉事件。第一版就是這樣錯的（run `20261103T160701-eb2s`）。

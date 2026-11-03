@@ -14,7 +14,14 @@ issue #2 記錄「跳轉按鈕點了常常沒有切換」。實測發現按鈕�
   - launch、`bg-start` 之後直接點（run `20261103T155923-eim6`、`20261103T160254-p0vh`）：`cmux tree` 在點擊後至少 14 秒內仍回報原 workspace，判讀成 3 次都沒切換。
   - 同一次（run `20261103T160254-p0vh`），`cmux events` 在第 1 次點擊時記錄到 `workspace.selected`，`payload.workspace_id` 是目標 workspace。第 2 次點擊前的截圖顯示，畫面已經選取目標 workspace。約 1 分鐘後，`cmux tree` 才顯示切換。
   - 同樣的失敗狀態下，用 CLI 送 `cmux rpc surface.focus`，`cmux tree` 立刻顯示切換。
-- `cmux tree` 在哪些情況會落後、為什麼落後，未查證。
+- 2026-11-04 追查 `cmux tree` 落後的原因（cmux 0.65.2，cmux 在前景）：
+  - 最小重現：`ccv launch` 開新 window 後，不做其他操作，直接點 server 列的跳轉。3 次都重現，不需要 Claude。
+  - 落後的不只是 `cmux tree`。`cmux current-workspace`、`cmux list-workspaces`、`cmux identify` 也都讀到舊的選取，至少 20 秒；約 1 分鐘後才更新。
+  - 同一時間，`workspace.selected` 事件與畫面都已切到目標。
+  - launch 後先用 `new-workspace` 多開一個 workspace 再點：2 次 tree 讀到目標；1 次讀到剛建立的 workspace，既不是原 workspace 也不是目標。
+  - cmux 原始碼（GitHub main）中，`system.tree` 與 `workspace.selected` 事件讀的都是同一個 TabManager 的 `selectedTabId`，`tabManagerFor(windowId:)` 每個 window 只回傳一個 TabManager。從原始碼解釋不了為什麼兩者會不一致。
+  - cmux 上游沒有找到類似的 issue。
+  - 根本原因未查出。要再深入，需要 cmux 的 debug build。
 - `cmux events --name workspace.selected` 可以只串流這種事件；`--timeout <秒>` 讓它在期限內沒有事件時結束（`cmux events --help`）。
 - `workspace.selected` 的 payload 有 `workspace_id`、`previous_workspace_id`、`title`（實測輸出）。
 - ccv 沒有單元測試。ccv 的改動用實跑證明。
@@ -29,6 +36,7 @@ issue #2 記錄「跳轉按鈕點了常常沒有切換」。實測發現按鈕�
 | 目標 workspace | server 列是 server 的 workspace；`bg` 是 `bg-start` 的 workspace；`agent` 是 `agent-tab-start` 的 workspace | 和 `ccv click` 的目標一致。（自動採用建議） |
 | 點擊前已經選取目標時 | `check-focus` 回報 FAIL，原因寫「點擊前已經選取目標，無法判斷」 | 不會有 `workspace.selected` 事件，不能當成通過。（自動採用建議） |
 | `capture` 的 tree | 保留，另外在 `capture` 加記 JSON tree 的 `selected_workspace_ref`，並註明可能落後 | tree 仍有用，只是不能拿來判斷切換。（自動採用建議） |
+| `cmux tree` 落後的原因 | 只記錄查到的事實，不再深入，也不回報上游 | 使用者決定。ccv 已改用事件判斷，驗證不受影響；再深入要用 cmux 的 debug build。 |
 | issue #2 | 實跑通過後，在 issue 留言說明原因與結果，再關閉 | 這是對外的動作，ship 的授權只涵蓋 commit 與 push，所以先問使用者。（自動採用建議） |
 
 ## 成功條件
@@ -99,7 +107,7 @@ issue #2 記錄「跳轉按鈕點了常常沒有切換」。實測發現按鈕�
 
 ## 不做的事
 
-- 查 `cmux tree` 為什麼會落後：屬於 cmux 本身，記錄在功能檔的 Gotchas。
+- 查出 `cmux tree` 落後的根本原因：2026-11-04 追查到原始碼層級仍解釋不了，使用者決定只記錄。
 - 改 `sidebars/services.js`：按鈕正常。
 - 複查 2026-11-01 的舊截圖：結論已由這次實跑確認。
 
