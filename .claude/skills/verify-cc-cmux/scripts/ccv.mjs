@@ -232,6 +232,156 @@ async function usageLive(account = "personal") {
   fail("120 秒內 " + ws[1] + " 的 sidebar-state 沒有 cc-cmux:7d: 開頭的 progress。畫面存在 usage-live-" + account + "-timeout.txt");
 }
 
+const WAIT_PROMPTS = {
+  question: "Use the AskUserQuestion tool exactly once to ask me whether I prefer Red or Blue, with the two options Red and Blue. Do nothing else.",
+  done: "Reply with exactly OK and nothing else.",
+};
+
+function workspaceInfo(state, ref) {
+  const tree = JSON.parse(cmux("--json", "tree", "--window", state.windowId));
+  for (const w of tree.windows || []) {
+    for (const ws of w.workspaces || []) {
+      if (ws.ref !== ref) continue;
+      const surface = (ws.panes || []).flatMap((p) => p.surfaces || [])[0] || null;
+      return { id: ws.id, title: ws.title, surface: surface?.ref || null, tty: surface?.tty || null, tabTitle: surface?.title || null };
+    }
+  }
+  return null;
+}
+
+function notifications() {
+  return (cmuxTry("list-notifications") || "").split("\n").filter(Boolean).map((l) => {
+    const f = l.replace(/^\d+:/, "").split("|");
+    return { id: f[0], workspaceId: f[1], surfaceId: f[2], state: f[3], title: f[5], body: f[6], at: f[7] };
+  });
+}
+
+function runNotifications(state) {
+  const ids = Object.values(state.wait || {}).map((w) => w.workspaceId).filter(Boolean);
+  return notifications().filter((n) => ids.includes(n.workspaceId));
+}
+
+function claudeOnTty(tty) {
+  if (!tty) return null;
+  const out = sh("ps", ["-t", tty.replace(/^\/dev\//, ""), "-o", "pid=,comm="], { allowFail: true }) || "";
+  const row = out.split("\n").map((l) => l.trim().split(/\s+/)).find((r) => /(^|\/)claude$/.test(r[1] || ""));
+  return row ? Number(row[0]) : null;
+}
+
+async function waitStart(mode) {
+  const state = loadState();
+  if (!WAIT_PROMPTS[mode]) fail("用法：ccv.mjs wait-start <question|done>");
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  state.wait = state.wait || {};
+  if (state.wait[mode]) fail("這個 run 已經有 wait-start " + mode);
+  const command = "cd " + JSON.stringify(REPO) + " && env -u CLAUDE_CONFIG_DIR claude --model haiku '" + WAIT_PROMPTS[mode] + "'";
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-wait-" + mode + "-" + state.runId, "--focus", "false", "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  const info = workspaceInfo(state, ws[1]);
+  state.wait[mode] = { workspace: ws[1], workspaceId: info?.id, surface: info?.surface, tty: info?.tty, startedAt: Date.now() };
+  saveState(state);
+  log(state, "wait-start " + mode + " workspace=" + ws[1] + " command=" + command);
+  const t0 = Date.now();
+  let screen = "";
+  while (Date.now() - t0 < 120000) {
+    screen = cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "";
+    if (!state.wait[mode].workspaceId || !state.wait[mode].tty) {
+      const found = workspaceInfo(state, ws[1]);
+      if (found) Object.assign(state.wait[mode], { workspaceId: found.id, surface: found.surface, tty: found.tty });
+    }
+    const pid = claudeOnTty(state.wait[mode].tty);
+    if (pid) state.wait[mode].claudePid = pid;
+    const unread = notifications().filter((n) => n.workspaceId === state.wait[mode].workspaceId && n.state === "unread");
+    const ready = mode === "question" ? /❯\s*1\.\s*Red/.test(screen) && /2\.\s*Blue/.test(screen) : unread.some((n) => /^Completed/.test(n.title || ""));
+    if (ready) {
+      state.wait[mode].readyAt = Date.now();
+      saveState(state);
+      const tab = workspaceInfo(state, ws[1]);
+      log(state, "wait-start " + mode + " ready after=" + (Date.now() - t0) + "ms id=" + state.wait[mode].workspaceId + " tty=" + state.wait[mode].tty + " pid=" + state.wait[mode].claudePid + " unread=" + unread.length);
+      console.log("WAIT READY " + mode + " workspace=" + ws[1] + " title=" + (tab?.title || "") + " tab=" + (tab?.tabTitle || "") + " pid=" + state.wait[mode].claudePid + " unread=" + unread.length);
+      return;
+    }
+    await sleep(2000);
+  }
+  saveState(state);
+  writeFileSync(join(state.evidenceDir, "wait-start-" + mode + "-timeout.txt"), now() + "\n" + JSON.stringify(notifications().filter((n) => n.workspaceId === state.wait[mode].workspaceId)) + "\n\n" + screen + "\n");
+  log(state, "wait-start " + mode + " timeout");
+  fail("120 秒內 wait-start " + mode + " 沒有就緒。畫面存在 wait-start-" + mode + "-timeout.txt");
+}
+
+function waitRows(state) {
+  const ws = cua("get_window_state", { pid: state.appPid, window_id: state.cuaWindowId, include_screenshot: false });
+  const els = (ws.elements || []).filter((e) => e.role === "AXStaticText" && e.frame);
+  const header = els.find((e) => e.label === "等你");
+  if (!header) return [];
+  const end = els.filter((e) => /^:\d+$/.test(e.label || "") || e.label === "沒有偵測到監聽中的 port").map((e) => e.frame.y).filter((y) => y > header.frame.y);
+  const limit = end.length ? Math.min(...end) : Infinity;
+  const below = els.filter((e) => e.frame.y > header.frame.y + header.frame.h / 2 && e.frame.y < limit).sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const rows = [];
+  for (const e of below) {
+    const last = rows[rows.length - 1];
+    if (last && Math.abs(last.y - e.frame.y) < Math.max(4, e.frame.h / 2)) last.els.push(e);
+    else rows.push({ y: e.frame.y, els: [e] });
+  }
+  return rows.map((r) => ({ text: r.els.map((e) => e.label).join(" "), frame: r.els[0].frame }));
+}
+
+function waitRowsSafe(state) {
+  try {
+    return waitRows(state).map((r) => r.text);
+  } catch (e) {
+    return ["(讀取失敗：" + e.message + ")"];
+  }
+}
+
+function waitRowsCmd() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const rows = waitRows(state).map((r) => r.text);
+  log(state, "wait-rows " + JSON.stringify(rows));
+  console.log(rows.length ? rows.join("\n") : "(沒有等你區)");
+}
+
+function clickRow(text) {
+  const state = loadState();
+  if (!text) fail("用法：ccv.mjs click-row <文字>");
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了，拒絕操作其他 window");
+  cmux("focus-window", "--window", state.windowId);
+  const shotFile = join(state.evidenceDir, "click-row-" + Date.now() + ".png");
+  const shotWidth = Number(cmux("shot", "--window", state.windowId, "--out", shotFile).split("x")[0]);
+  const w = cuaWindow(state);
+  const matches = waitRows(state).filter((r) => r.text.includes(text));
+  if (!w || matches.length === 0) fail("等你區沒有包含「" + text + "」的列");
+  if (matches.length > 1) fail("等你區有 " + matches.length + " 列包含「" + text + "」，請給更明確的文字");
+  const scale = shotWidth / w.bounds.width;
+  if (!(scale >= 1 && scale <= 3) || w.bounds.height < 200) {
+    log(state, "click-row refused shotWidth=" + shotWidth + " bounds=" + JSON.stringify(w.bounds));
+    fail("window 大小不合理，拒絕點擊：shotWidth=" + shotWidth + " bounds=" + JSON.stringify(w.bounds));
+  }
+  const f = matches[0].frame;
+  const x = Math.round((f.x + f.w / 2 - w.bounds.x) * scale);
+  const y = Math.round((f.y + f.h / 2 - w.bounds.y) * scale);
+  const result = cua("click", { pid: state.appPid, window_id: state.cuaWindowId, x, y, delivery_mode: "foreground" });
+  state.lastRowClick = { text: matches[0].text, at: Date.now() };
+  saveState(state);
+  const selected = (cmuxTry("tree", "--window", state.windowId) || "").split("\n").filter((l) => /workspace .*\[selected\]/.test(l)).join(" ");
+  log(state, "click-row " + JSON.stringify(matches[0].text) + " scale=" + scale + " frame=" + JSON.stringify(f) + " px=" + x + "," + y + " result=" + JSON.stringify(result) + " selected=" + selected + " preshot=" + shotFile);
+  console.log("CLICKED ROW " + JSON.stringify(matches[0].text) + " px=" + x + "," + y + "\nSELECTED " + selected.trim());
+}
+
+function waitKill() {
+  const state = loadState();
+  const pid = state.wait?.question?.claudePid || state.wait?.done?.claudePid;
+  if (!pid) fail("這個 run 沒有 wait-start 記錄的 Claude PID");
+  const comm = sh("ps", ["-o", "comm=", "-p", String(pid)], { allowFail: true });
+  if (!comm || !/(^|\/)claude$/.test(comm)) fail("PID " + pid + " 不是 claude 或已結束：" + comm);
+  process.kill(pid, "SIGKILL");
+  state.waitKilled = { pid, at: Date.now() };
+  saveState(state);
+  log(state, "wait-kill SIGKILL " + pid);
+  console.log("WAIT KILLED " + pid);
+}
+
 function targetPort(state, target) {
   if (!target) return state.port;
   if (target === "bg") {
@@ -409,6 +559,8 @@ function capture(label) {
   sec("panel row :" + state.port, row ? "present " + JSON.stringify(row.frame) : "absent");
   sec("status_count", ((cmuxTry("sidebar-state", "--workspace", state.serverWorkspace) || "").match(/^status_count=.*$/m) || ["(無)"])[0]);
   sec("usage rows", usageRowsSafe(state).join("\n") || "(面板沒有 7d 列)");
+  sec("wait rows", waitRowsSafe(state).join("\n") || "(沒有等你區)");
+  sec("wait notifications", runNotifications(state).map((n) => n.workspaceId + " " + n.state + " " + n.title + " " + n.at).join("\n") || "(無)");
   sec("usage progress", usageWorkspaces(state).map(([k, ws]) => k + " " + ws + " " + progressLine(ws)).join("\n"));
   if (state.bg?.ports) {
     const bgState = cmuxTry("sidebar-state", "--workspace", state.bg.workspace) || "";
@@ -643,9 +795,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|cleanup [run]>");
   process.exit(2);
 }
 try {
