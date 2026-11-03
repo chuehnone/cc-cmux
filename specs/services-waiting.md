@@ -22,6 +22,7 @@
 - sidebar 只看得到所在 window 的 workspace（claude-rate-limit 規劃時查到）。
 - port 列的跳轉按鈕用 `cmux("surface.focus", { surface_id, workspace_id })`；沒有分頁時改用 `workspace.select`（`sidebars/services.js`）。
 - 7d 列的剩餘時間用 `formatLeft`，格式是「N 天 M 小時」（`sidebars/services.js`）。
+- 實測（2026-11-03）：閒置提醒送到時，agent 的 `lastActivityAt` 會更新成提醒的時間，`status` 仍是 `idle`。所以 `跑完` 的等待時間從閒置提醒起算，比實際跑完的時間少約 1 分鐘。
 - 以上 cmux 原始碼依 GitHub main。本機版本 0.65.2，兩者是否一致，未查證。
 
 ## 決策
