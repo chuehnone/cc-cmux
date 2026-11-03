@@ -237,3 +237,14 @@ test("needs_input 的 agent 顯示成問題列，橘點，從 sinceEpoch 算等�
   assert.equal(w[0].dot, "#FF9F0A");
   assert.ok(s.texts().includes("等你"));
 });
+
+test("idle 且分頁有未讀時顯示成跑完列，藍點，從 lastActivityAt 算等待時間", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs([agent("idle", "P2", { lastActivityAt: T - 720 })], [wtab("P2", "Raphael-PB", true)])],
+    clock: { epoch: T },
+  });
+  const w = s.waiting();
+  assert.equal(w.length, 1);
+  assert.deepEqual(w[0].texts, ["Raphael · Raphael-PB", "跑完", "12 分"]);
+  assert.equal(w[0].dot, "#0A84FF");
+});

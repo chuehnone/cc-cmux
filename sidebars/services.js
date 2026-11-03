@@ -76,17 +76,20 @@ const waitingItems = () => {
   const now = data.clock()?.epoch ?? 0;
   const out = [];
   for (const w of data.workspaces() ?? []) {
-    const tabTitles = {};
-    for (const t of w.tabs ?? []) tabTitles[t.id] = t.title;
+    const tabs = {};
+    for (const t of w.tabs ?? []) tabs[t.id] = t;
     for (const a of w.agents ?? []) {
-      if (a.status !== "needs_input") continue;
+      const tab = tabs[a.panelId];
+      const question = a.status === "needs_input";
+      const done = a.status === "idle" && tab?.hasUnread === true;
+      if (!question && !done) continue;
       out.push({
         key: "row:" + a.id,
         kind: "row",
-        text: w.title + " · " + tabTitles[a.panelId],
-        label: "問題",
-        dot: "#FF9F0A",
-        wait: formatWait(now - a.sinceEpoch),
+        text: w.title + " · " + tab?.title,
+        label: question ? "問題" : "跑完",
+        dot: question ? "#FF9F0A" : "#0A84FF",
+        wait: formatWait(now - (question ? a.sinceEpoch : a.lastActivityAt)),
       });
     }
   }
