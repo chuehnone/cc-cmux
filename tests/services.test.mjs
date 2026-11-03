@@ -304,3 +304,11 @@ test("找不到對應分頁時顯示分頁不明，點一下送 workspace.select
   assert.deepEqual(w.map((r) => r.texts[0]), ["Raphael · 分頁不明", "Raphael · 分頁不明"]);
   assert.deepEqual(w[0].tap().at(-1), { fn: "cmux", method: "workspace.select", params: { workspace_id: "W1" } });
 });
+
+test("needs_input 沒有 sinceEpoch 時，用 lastActivityAt 算等待時間", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs([agent("needs_input", "P1", { lastActivityAt: T - 180 })], [wtab("P1", "a")])],
+    clock: { epoch: T },
+  });
+  assert.equal(s.waiting()[0]?.texts[2], "3 分");
+});

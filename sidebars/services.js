@@ -88,7 +88,7 @@ const waitingItems = () => {
       const question = a.status === "needs_input";
       const done = a.status === "idle" && tab?.hasUnread === true;
       if (!question && !done) continue;
-      const since = question ? a.sinceEpoch : a.lastActivityAt;
+      const since = question ? a.sinceEpoch ?? a.lastActivityAt : a.lastActivityAt;
       out.push({
         key: "row:" + a.id,
         kind: "row",
