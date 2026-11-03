@@ -93,6 +93,8 @@ const waitingItems = () => {
         key: "row:" + a.id,
         kind: "row",
         rank: question ? 0 : 1,
+        workspaceId: w.id,
+        surfaceId: tab?.surfaceId,
         since,
         text: w.title + " · " + tab?.title,
         label: question ? "問題" : "跑完",
@@ -136,6 +138,7 @@ sidebar(() =>
           Text(() => i().label).font(10).color("secondary").layoutPriority(2),
           Text(() => i().wait).font(10).color("tertiary").layoutPriority(2),
         ]).paddingHorizontal(10)
+          .onTap(() => cmux("surface.focus", { surface_id: i().surfaceId, workspace_id: i().workspaceId }))
     ),
     Divider(),
     ForEach(

@@ -282,3 +282,12 @@ test("問題排在跑完前面，同一種依等待時間由長到短", () => {
   });
   assert.deepEqual(s.waiting().map((w) => w.texts.slice(1).join(" ")), ["問題 5 分", "問題 1 分", "跑完 20 分"]);
 });
+
+test("點一下等你列，用對應分頁的 surfaceId 送 surface.focus", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs([agent("needs_input", "P1", { sinceEpoch: T - 60 })], [wtab("P1", "Raphael-PR")])],
+    clock: { epoch: T },
+  });
+  const calls = s.waiting()[0].tap();
+  assert.deepEqual(calls.at(-1), { fn: "cmux", method: "surface.focus", params: { surface_id: "P1", workspace_id: "W1" } });
+});
