@@ -18,7 +18,9 @@ const rows = () => {
     }
     const tabPorts = new Set((w.tabs ?? []).flatMap((t) => t.ports ?? []));
     const agents = w.agents ?? [];
-    const soleAgentSurface = agents.length === 1 ? agents[0].surfaceId : undefined;
+    const sole = agents.length === 1 ? agents[0] : undefined;
+    const soleTab = sole && ((w.tabs ?? []).find((t) => sole.panelId && t.id === sole.panelId) ?? (w.tabs ?? []).find((t) => sole.surfaceId && t.surfaceId === sole.surfaceId));
+    const soleAgentSurface = soleTab?.surfaceId;
     for (const p of new Set(w.ports ?? [])) {
       if (tabPorts.has(p)) continue;
       out.push({

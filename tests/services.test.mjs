@@ -371,3 +371,8 @@ test("ended 的 agent 綁在分頁上時仍上鎖", () => {
   });
   assert.ok(s.rows()[0].buttons.some((b) => b.symbol === "lock"));
 });
+
+test("背景列跳轉用 agent 的 panelId 找分頁，送分頁的 surfaceId", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [tab("p9", "claude", "p9", [])], [{ panelId: "p9", surfaceId: "x9" }])] });
+  assert.deepEqual(s.tap(9000, "arrow.right.square").at(-1), { fn: "cmux", method: "surface.focus", params: { surface_id: "p9", workspace_id: "w1" } });
+});
