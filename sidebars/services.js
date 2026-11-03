@@ -70,6 +70,29 @@ const usageRows = () => {
   });
 };
 
+const formatWait = (sec) => Math.floor(sec / 60) + " 分";
+
+const waitingItems = () => {
+  const now = data.clock()?.epoch ?? 0;
+  const out = [];
+  for (const w of data.workspaces() ?? []) {
+    const tabTitles = {};
+    for (const t of w.tabs ?? []) tabTitles[t.id] = t.title;
+    for (const a of w.agents ?? []) {
+      if (a.status !== "needs_input") continue;
+      out.push({
+        key: "row:" + a.id,
+        kind: "row",
+        text: w.title + " · " + tabTitles[a.panelId],
+        label: "問題",
+        dot: "#FF9F0A",
+        wait: formatWait(now - a.sinceEpoch),
+      });
+    }
+  }
+  return out.length ? [{ key: "header", kind: "header" }, ...out] : out;
+};
+
 function iconButton(symbol, color, action) {
   return Image(symbol).font(11).color(color)
     .paddingHorizontal(5).paddingVertical(3)
@@ -88,6 +111,19 @@ sidebar(() =>
     ForEach(
       { items: usageRows, key: (u) => u.account },
       (u) => Text(() => u().text).font(11).color(() => u().color).paddingHorizontal(10)
+    ),
+    ForEach(
+      { items: waitingItems, key: (i) => i.key },
+      (i) =>
+        i().kind === "header"
+          ? Text("等你").font(11).weight("semibold").color("secondary").paddingHorizontal(10)
+          : HStack({ spacing: 6 }, [
+          Circle({ size: 6 }).fill(() => i().dot),
+          Text(() => i().text).font(11).lineLimit(1).truncation("middle"),
+          Spacer(),
+          Text(() => i().label).font(10).color("secondary").layoutPriority(2),
+          Text(() => i().wait).font(10).color("tertiary").layoutPriority(2),
+        ]).paddingHorizontal(10)
     ),
     Divider(),
     ForEach(

@@ -220,3 +220,20 @@ test("clock 前進 1 小時，剩餘時間少 1 小時", () => {
   clock.epoch = NOW + HOUR;
   assert.equal(s.usage()[0]?.text, "個人 7d 剩 4 小時 1 分 · 已用 10%");
 });
+
+const T = 1793700000;
+const agent = (status, panelId, extra = {}) => ({ id: "a-" + panelId + "-" + status, kind: "claude", name: "Claude", status, panelId, surfaceId: "X-" + panelId, lastActivityAt: T - 60, ...extra });
+const waitWs = (agents, tabs, id = "W1", title = "Raphael") => ({ id, title, tabs, agents });
+const wtab = (panelId, title, hasUnread = false) => ({ id: panelId, title, surfaceId: panelId, hasUnread });
+
+test("needs_input 的 agent 顯示成問題列，橘點，從 sinceEpoch 算等待時間", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs([agent("needs_input", "S1", { sinceEpoch: T - 180 })], [wtab("S1", "Raphael-PR")])],
+    clock: { epoch: T },
+  });
+  const w = s.waiting();
+  assert.equal(w.length, 1);
+  assert.deepEqual(w[0].texts, ["Raphael · Raphael-PR", "問題", "3 分"]);
+  assert.equal(w[0].dot, "#FF9F0A");
+  assert.ok(s.texts().includes("等你"));
+});

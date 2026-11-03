@@ -94,6 +94,18 @@ export function loadSidebar(name, { workspaces = [], clock = { epoch: 0 } } = {}
     walk(view(), (n) => { if (n.type === "Text" && /^(個人 |公司 )?7d /.test(n.value ?? "")) out.push({ text: n.value, color: n.color }); });
     return out;
   };
+  const waiting = () => {
+    const out = [];
+    walk(view(), (n) => {
+      if (n.type !== "HStack") return;
+      const all = [];
+      walk(n, (c) => all.push(c));
+      const texts = all.filter((c) => c.type === "Text").map((c) => c.value);
+      if (!texts.some((t) => t === "問題" || t === "跑完")) return;
+      out.push({ texts, dot: all.find((c) => c.type === "Circle")?.fill, tap: () => { n.action(); return calls; } });
+    });
+    return out;
+  };
   const tap = (port, symbol) => {
     const row = rows().find((r) => r.port === port);
     if (!row) throw new Error("面板沒有 :" + port + " 這一列");
@@ -102,5 +114,5 @@ export function loadSidebar(name, { workspaces = [], clock = { epoch: 0 } } = {}
     button.tap();
     return calls;
   };
-  return { view, texts, rows, usage, tap, calls };
+  return { view, texts, rows, usage, waiting, tap, calls };
 }
