@@ -346,3 +346,12 @@ test("沒有在等的 session 時，不顯示等你標題", () => {
   });
   assert.ok(!s.texts().includes("等你"));
 });
+
+test("agent 沒有 panelId，但 surfaceId 等於分頁的 surfaceId 時，仍顯示鎖頭", () => {
+  const s = loadSidebar("services", {
+    workspaces: [ws("w1", "api", [tab("p1", "claude", "p1", [8080])], [{ surfaceId: "p1" }])],
+  });
+  const row = s.rows()[0];
+  assert.equal(row.dot, "#FF9F0A");
+  assert.ok(row.buttons.some((b) => b.symbol === "lock"));
+});
