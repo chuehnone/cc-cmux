@@ -96,7 +96,7 @@ const waitingItems = () => {
         workspaceId: w.id,
         surfaceId: tab?.surfaceId,
         since,
-        text: w.title + " · " + tab?.title,
+        text: w.title + " · " + (tab ? tab.title : "分頁不明"),
         label: question ? "問題" : "跑完",
         dot: question ? "#FF9F0A" : "#0A84FF",
         wait: formatWait(now - since),
@@ -138,7 +138,10 @@ sidebar(() =>
           Text(() => i().label).font(10).color("secondary").layoutPriority(2),
           Text(() => i().wait).font(10).color("tertiary").layoutPriority(2),
         ]).paddingHorizontal(10)
-          .onTap(() => cmux("surface.focus", { surface_id: i().surfaceId, workspace_id: i().workspaceId }))
+          .onTap(() =>
+            i().surfaceId
+              ? cmux("surface.focus", { surface_id: i().surfaceId, workspace_id: i().workspaceId })
+              : cmux("workspace.select", { workspace_id: i().workspaceId }))
     ),
     Divider(),
     ForEach(

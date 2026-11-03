@@ -291,3 +291,16 @@ test("點一下等你列，用對應分頁的 surfaceId 送 surface.focus", () =
   const calls = s.waiting()[0].tap();
   assert.deepEqual(calls.at(-1), { fn: "cmux", method: "surface.focus", params: { surface_id: "P1", workspace_id: "W1" } });
 });
+
+test("找不到對應分頁時顯示分頁不明，點一下送 workspace.select", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs(
+      [agent("needs_input", "P9", { sinceEpoch: T - 60 }), { id: "a-none", kind: "claude", name: "Claude", status: "needs_input", sinceEpoch: T - 30, lastActivityAt: T - 30 }],
+      [wtab("P1", "Raphael-PR")],
+    )],
+    clock: { epoch: T },
+  });
+  const w = s.waiting();
+  assert.deepEqual(w.map((r) => r.texts[0]), ["Raphael · 分頁不明", "Raphael · 分頁不明"]);
+  assert.deepEqual(w[0].tap().at(-1), { fn: "cmux", method: "workspace.select", params: { workspace_id: "W1" } });
+});
