@@ -426,7 +426,75 @@ function targetPort(state, target) {
     if (!state.bg?.port) fail("這個 run 沒有背景服務。先執行 ccv.mjs bg-start");
     return state.bg.port;
   }
-  fail("目標只能省略或寫 bg");
+  if (target === "agent") {
+    if (!state.agentTab?.port) fail("這個 run 沒有 agent 分頁。先執行 ccv.mjs agent-tab-start");
+    return state.agentTab.port;
+  }
+  fail("目標只能省略，或寫 bg、agent");
+}
+
+async function agentTabStart() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  if (state.agentTab) fail("這個 run 已經有 agent 分頁：port " + state.agentTab.port);
+  let port = null;
+  for (let p = 18750; p <= PORT_RANGE[1]; p++) {
+    if (await portFree(p)) { port = p; break; }
+  }
+  if (!port) fail("18750-18799 沒有空的 port");
+  const command = "python3 -I -m http.server " + port + " --bind 127.0.0.1 --directory " + JSON.stringify(state.dataDir) + " >/dev/null 2>&1 & cd " + JSON.stringify(REPO) + " && env -u CLAUDE_CONFIG_DIR claude --model haiku 'Reply with exactly OK and nothing else.'";
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "verify-agenttab-" + state.runId, "--focus", "false", "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.agentTab = { workspace: ws[1], port, startedAt: Date.now() };
+  saveState(state);
+  log(state, "agent-tab-start workspace=" + ws[1] + " port=" + port + " command=" + command);
+  const t0 = Date.now();
+  let missing = [];
+  while (Date.now() - t0 < 120000) {
+    const info = workspaceInfo(state, ws[1]);
+    const serverPid = listenerPid(port);
+    const claudePid = claudeOnTty(info?.tty);
+    const serverTty = serverPid ? sh("ps", ["-o", "tty=", "-p", String(serverPid)], { allowFail: true }) : null;
+    const ports = cmuxTry("sidebar-state", "--workspace", ws[1]) || "";
+    const detected = new RegExp("^ports=.*\\b" + port + "\\b", "m").test(ports);
+    const unread = info?.id ? notifications().some((n) => n.workspaceId === info.id && /^Completed/.test(n.title || "")) : false;
+    missing = [!serverPid && "port LISTEN", serverPid && info?.tty && serverTty !== info.tty.replace(/^ttys/, "s") && serverTty !== info.tty && "server 在分頁的 tty 上", !claudePid && "分頁上的 claude", !detected && "sidebar-state 偵測到 port", !unread && "Claude 回合結束"].filter(Boolean);
+    if (missing.length === 0) {
+      Object.assign(state.agentTab, { workspaceId: info.id, surface: info.surface, tty: info.tty, serverPid, claudePid });
+      saveState(state);
+      log(state, "agent-tab ready port=" + port + " serverPid=" + serverPid + " claudePid=" + claudePid + " tty=" + info.tty + " after=" + (Date.now() - t0) + "ms");
+      console.log("AGENT TAB READY port=" + port + " workspace=" + ws[1] + " serverPid=" + serverPid + " claudePid=" + claudePid + " tty=" + info.tty);
+      return;
+    }
+    Object.assign(state.agentTab, { serverPid, claudePid, tty: info?.tty });
+    saveState(state);
+    await sleep(2000);
+  }
+  writeFileSync(join(state.evidenceDir, "agent-tab-start-timeout.txt"), now() + "\nmissing=" + missing.join(",") + "\n\n" + (cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "(read-screen 失敗)") + "\n");
+  log(state, "agent-tab-start timeout missing=" + missing.join(","));
+  fail("120 秒內 agent 分頁沒有就緒，缺：" + missing.join("、") + "。請執行 cleanup 後再試。");
+}
+
+async function checkLock() {
+  const state = loadState();
+  const at = state.agentTab;
+  if (!at?.claudePid) fail("先執行 ccv.mjs agent-tab-start");
+  if (!state.lastClick || state.lastClick.target !== "agent" || state.lastClick.button !== "stop") fail("先執行 ccv.mjs click stop agent");
+  while (Date.now() - state.lastClick.at < 5000) await sleep(500);
+  const screen = cmuxTry("read-screen", "--workspace", at.workspace, "--lines", "40") || "";
+  const claudeAlive = sh("ps", ["-o", "comm=", "-p", String(at.claudePid)], { allowFail: true });
+  const listening = listenerPid(at.port) === at.serverPid;
+  const checks = [
+    ["NO_CTRL_C", !screen.includes("^C"), "畫面" + (screen.includes("^C") ? "有" : "沒有") + " ^C"],
+    ["CLAUDE_ALIVE", !!claudeAlive && /(^|\/)claude$/.test(claudeAlive), "pid " + at.claudePid + " " + (claudeAlive || "已結束")],
+    ["PORT_LISTEN", listening, "port " + at.port + " listener=" + listenerPid(at.port)],
+  ];
+  const lines = checks.map(([n, ok, d]) => n + " " + (ok ? "PASS" : "FAIL") + " " + d);
+  writeFileSync(join(state.evidenceDir, "check-lock.txt"), now() + "\n" + lines.join("\n") + "\n\n" + screen + "\n");
+  log(state, "check-lock " + lines.join(" / "));
+  capture("check-lock");
+  console.log(lines.join("\n"));
+  process.exit(checks.every((c) => c[1]) ? 0 : 1);
 }
 
 function ancestors(pid) {
@@ -810,6 +878,16 @@ async function cleanup(runId) {
     process.kill(state.serverPid, "SIGTERM");
     lines.push("SIGTERM " + state.serverPid + "（這個 run 啟動的 server）");
   }
+  for (const [name, pid] of [["agent 分頁的 server", state.agentTab?.serverPid], ["agent 分頁的 claude", state.agentTab?.claudePid]]) {
+    if (!pid) continue;
+    for (let i = 0; i < 20 && sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true }); i++) await sleep(250);
+    if (sh("ps", ["-o", "pid=", "-p", String(pid)], { allowFail: true })) {
+      process.kill(pid, "SIGTERM");
+      lines.push("SIGTERM " + pid + "（這個 run 啟動的 " + name + "）");
+    } else {
+      lines.push(name + " " + pid + " 已結束");
+    }
+  }
   const bgPids = [...(state.bg?.serverPids || [state.bg?.serverPid]).map((p) => ["bg server", p]), ...(state.bg?.agentPids || [state.bg?.agentPid]).map((p) => ["agent", p])];
   for (const [name, pid] of bgPids) {
     if (!pid) continue;
@@ -833,9 +911,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "agent-tab-start": agentTabStart, "check-lock": checkLock, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg|agent]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|agent-tab-start|check-lock|cleanup [run]>");
   process.exit(2);
 }
 try {
