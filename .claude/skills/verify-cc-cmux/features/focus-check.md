@@ -30,3 +30,9 @@ Preconditions:
 - 不要用 `cmux tree` 或 `ccv capture` 的 `tree` 判斷跳轉成功與否。2026-11-03 實測，`cmux tree` 在點擊後至少 14 秒仍回報舊的選取，畫面與事件卻已經切換（run `20261103T160254-p0vh`）。哪些情況會落後，原因未查證。
 - `check-focus` 只看點擊後 5 秒內的事件。
 - `bg-start` 會用到 token。
+- `check-focus` 要從點擊**之前**起算。cmux-cua 的點擊呼叫回傳前後差約 2 秒，從回傳後起算會漏掉事件。第一版就是這樣錯的（run `20261103T160701-eb2s`）。
+- 2026-11-03 實跑結果（cmux 在前景）：
+  - `focus-tab` PASS：0.1 秒收到切換事件（run `20261103T160828-kmqv`）。
+  - `focus-negative` 如預期 FAIL：「點擊前已經選取目標」（同一個 run）。
+  - `focus-bg` PASS：launch、`bg-start` 後直接點，0.1 秒收到切換事件；同一次 capture 的 `tree` 在 10 秒後仍回報原 workspace（run `20261103T160904-qz0k`）。
+  - 回歸 install、list、stop PASS（run `20261103T160828-kmqv`）。

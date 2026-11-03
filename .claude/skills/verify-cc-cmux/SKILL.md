@@ -178,6 +178,7 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 | `ccv wait-kill` | 用 SIGKILL 結束 `wait-start` 的 Claude |
 | `ccv agent-tab-start` | 在同一個分頁先用 `&` 啟動 server，再啟動互動模式的 Claude。`cleanup` 會結束兩者。會用到 token |
 | `ccv click <open\|focus\|stop> agent` | 點 agent 分頁那一列的按鈕 |
+| `ccv check-focus` | 按下跳轉後檢查：點擊前起算 5 秒內，有沒有切到目標 workspace 的 `workspace.selected` 事件。判斷跳轉一律用它，不要看 `cmux tree`，tree 的選取可能落後實際畫面十幾秒 |
 | `ccv check-lock` | 按下鎖頭後檢查：畫面沒有 `^C`、Claude 還在、port 還在 LISTEN |
 | `ccv capture <label>` | 存截圖和狀態。另外記錄面板的 7d 列與每個 workspace 的 `progress=` |
 | `ccv cleanup [run]` | 收掉這個 run 開的東西，保留證據 |
@@ -200,4 +201,4 @@ ccv launch && ccv doctor && ccv capture before-stop && ccv click stop && ccv che
 2. **確認 ccv 能操作新的 UI。** 逐條對照第 1 步的 Drive，確認每個操作和每個成功條件都有 `ccv` 指令可用。不能時，先擴充 `scripts/ccv.mjs`，並實跑一次證明能用，再開始實作。
 3. **一小段一小段做。** 用 implement-cc-cmux 實作，它照 TDD 一個行為一輪。每完成一小段，就跑一次這個功能的 Drive 和 Evidence。通過後才 commit 這一段，再做下一段。失敗時，先 `ccv cleanup`，修好再跑。
 4. **交件時附上證據，並回歸測試。** 附上新功能的證據路徑 `~/.cache/cc-cmux-verify/<run>/`。再跑一次既有功能（install、list、stop），確認舊功能沒壞。
-5. **驗證不了的部分，回報「未驗證」。** 未驗證不算通過。目前未驗證的有：2 倍螢幕上的點擊、`services-focus`、`services-open`、空狀態。新功能用到這些地方時，先補上驗證。
+5. **驗證不了的部分，回報「未驗證」。** 未驗證不算通過。目前未驗證的有：2 倍螢幕上的點擊、`services-open`、空狀態。新功能用到這些地方時，先補上驗證。

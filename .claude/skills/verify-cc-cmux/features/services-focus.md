@@ -18,12 +18,13 @@ Preconditions:
 - `ccv doctor` 全部 `OK`。
 - 本次 run 的 window 目前選取的是第一個 workspace（`verify-cc-cmux-<run>`），不是 server 所在的 workspace。launch 後就是這個狀態。
 
-- **記錄操作前。** 執行 `ccv capture before-focus`。`before-focus.txt` 的 `tree` 裡，`verify-cc-cmux-<run>` 標著 `[selected]`。
-- **點跳轉。** 執行 `ccv click focus`。
-- **確認結果。** 執行 `ccv capture after-focus`。`after-focus.txt` 的 `tree` 裡，`verify-svc-<run>` 標著 `[selected]`；`after-focus.png` 的中間區域顯示 server 分頁，畫面有 `Serving HTTP on 127.0.0.1 port <port>`。
+- **點跳轉。** 執行 `ccv click focus`，再執行 `ccv check-focus`，回報 `FOCUS PASS`。
+- **確認畫面。** 執行 `ccv capture after-focus`。`after-focus.png` 的中間區域顯示 server 分頁，畫面有 `Serving HTTP on 127.0.0.1 port <port>`。不要用 `after-focus.txt` 的 `tree` 判斷切換，它可能落後。
 
 ## Gotchas
 
 - 這個功能還沒實跑過。
 - 跳轉按鈕距離 window 右緣 63 pt，是從截圖量出來的。面板版面改了，就要重量。
 - 點擊前 ccv 會把本次 run 的 window 移到最前面。不要把「window 在最前面」當成跳轉成功的證據。
+- 2026-11-03 查明 issue #2：按鈕正常，是 `cmux tree` 的選取落後實際畫面，把成功判讀成失敗。改用 `ccv check-focus` 判斷（`focus-check.md`）。
+- 2026-11-03 實跑（cmux 在前景，run `20261103T160828-kmqv`）：focus-switch PASS，`check-focus` 在點擊後 0.1 秒收到切換事件。
