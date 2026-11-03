@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, appendFileSync, lstatSync, readlinkSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, openSync, closeSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync, appendFileSync, lstatSync, readlinkSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -420,6 +420,30 @@ function waitKill() {
   console.log("WAIT KILLED " + pid);
 }
 
+async function checkFocus() {
+  const state = loadState();
+  const c = state.lastClick;
+  if (!c || c.button !== "focus" || !c.focus) fail("先執行 ccv.mjs click focus [bg|agent]");
+  const start = c.startedAt ?? c.at;
+  while (Date.now() - start < 5000) await sleep(250);
+  const f = c.focus;
+  const lines = existsSync(f.eventsFile) ? readFileSync(f.eventsFile, "utf8").split("\n").filter(Boolean) : null;
+  const events = (lines || []).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter((e) => e && e.name === "workspace.selected");
+  const inWindow = events.filter((e) => { const t = Date.parse(e.occurred_at); return t >= start && t <= start + 5000; });
+  const hit = inWindow.find((e) => e.payload?.workspace_id === f.targetId);
+  let verdict;
+  if (!f.targetId) verdict = "FOCUS FAIL 找不到目標 workspace 的 id（" + f.targetRef + "）";
+  else if (lines === null) verdict = "FOCUS FAIL 沒有事件檔";
+  else if (f.before === f.targetRef) verdict = "FOCUS FAIL 點擊前已經選取目標（" + f.targetRef + "）";
+  else if (hit) verdict = "FOCUS PASS t=" + ((Date.parse(hit.occurred_at) - start) / 1000).toFixed(1) + "s workspace=" + f.targetRef;
+  else verdict = "FOCUS FAIL 5 秒內沒有切到目標（" + f.targetRef + "）";
+  const detail = "target=" + f.targetRef + " id=" + f.targetId + " before=" + f.before + " events=" + JSON.stringify(inWindow.map((e) => ({ at: e.occurred_at, workspace_id: e.payload?.workspace_id, title: e.payload?.title })));
+  writeFileSync(join(state.evidenceDir, "check-focus-" + c.at + ".txt"), now() + "\n" + verdict + "\n" + detail + "\n");
+  log(state, "check-focus " + verdict + " " + detail);
+  console.log(verdict + "\n" + detail);
+  process.exit(verdict.startsWith("FOCUS PASS") ? 0 : 1);
+}
+
 function targetPort(state, target) {
   if (!target) return state.port;
   if (target === "bg") {
@@ -617,7 +641,32 @@ function window_row_safe(state, port) {
   }
 }
 
-function click(button, target) {
+function focusTargetRef(state, target) {
+  if (!target) return state.serverWorkspace;
+  if (target === "bg") return state.bg?.workspace;
+  if (target === "agent") return state.agentTab?.workspace;
+  return null;
+}
+
+function selectedRef(state) {
+  try {
+    return JSON.parse(cmux("--json", "tree", "--window", state.windowId)).windows?.[0]?.selected_workspace_ref || null;
+  } catch {
+    return null;
+  }
+}
+
+async function startFocusEvents(state) {
+  const file = join(state.evidenceDir, "focus-events-" + Date.now() + ".jsonl");
+  const fd = openSync(file, "w");
+  const child = spawn("cmux", ["events", "--name", "workspace.selected", "--no-heartbeat", "--timeout", "8"], { detached: true, stdio: ["ignore", fd, "ignore"] });
+  child.unref();
+  closeSync(fd);
+  for (let i = 0; i < 20 && !(existsSync(file) && readFileSync(file, "utf8").length > 0); i++) await sleep(100);
+  return file;
+}
+
+async function click(button, target) {
   const state = loadState();
   if (!(button in BUTTON_OFFSET_FROM_RIGHT)) fail("按鈕只能是 open、focus、stop");
   const port = targetPort(state, target);
@@ -637,8 +686,15 @@ function click(button, target) {
   const yPt = row.frame.y + row.frame.h;
   const x = Math.round((xPt - w.bounds.x) * scale);
   const y = Math.round((yPt - w.bounds.y) * scale);
+  let focus = null;
+  if (button === "focus") {
+    const targetRef = focusTargetRef(state, target);
+    const info = targetRef ? workspaceInfo(state, targetRef) : null;
+    focus = { targetRef, targetId: info?.id || null, before: selectedRef(state), eventsFile: await startFocusEvents(state) };
+  }
+  const clickStartedAt = Date.now();
   const result = cua("click", { pid: state.appPid, window_id: state.cuaWindowId, x, y, delivery_mode: "foreground" });
-  state.lastClick = { button, target: target || "server", port, at: Date.now() };
+  state.lastClick = { button, target: target || "server", port, at: Date.now(), startedAt: clickStartedAt, focus };
   saveState(state);
   log(state, "click " + button + " port=" + port + " shotWidth=" + shotWidth + " boundsWidth=" + w.bounds.width + " scale=" + scale + " bounds=" + JSON.stringify(w.bounds) + " row=" + JSON.stringify(row.frame) + " px=" + x + "," + y + " result=" + JSON.stringify(result) + " preshot=" + shotFile);
   console.log("CLICKED " + button + " scale=" + scale + " px=" + x + "," + y + " " + JSON.stringify(result));
@@ -694,6 +750,7 @@ function capture(label) {
     sec("bg panel subtitle", bgRow.subtitle ? bgRow.subtitle.label : "(無)");
     sec("bg agent surface screen", state.bg.surface ? cmuxTry("read-screen", "--workspace", state.bg.workspace, "--surface", state.bg.surface, "--lines", "15") : null);
   }
+  sec("selected_workspace_ref (JSON tree，可能落後實際畫面)", selectedRef(state));
   sec("list-windows", cmuxTry("list-windows"));
   sec("tree (this run's window)", workspaceTree(state));
   sec("server surface screen", state.serverSurface ? cmuxTry("read-screen", "--workspace", state.serverWorkspace, "--surface", state.serverSurface, "--lines", "15") : null);
@@ -911,9 +968,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "agent-tab-start": agentTabStart, "check-lock": checkLock, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "agent-tab-start": agentTabStart, "check-lock": checkLock, "check-focus": checkFocus, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg|agent]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|agent-tab-start|check-lock|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg|agent]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|agent-tab-start|check-lock|check-focus|cleanup [run]>");
   process.exit(2);
 }
 try {
