@@ -33,3 +33,9 @@ Preconditions:
 - 用 `&` 啟動的 server 不屬於 window 的終端機行程，關掉 window 後還會留著。`agent-tab-start` 要記錄它的 PID，讓 `ccv cleanup` 結束它。
 - `agent-tab-start` 會用到 token。
 - 不要對 Claude 的分頁按真正的停止按鈕來證明修正前的錯誤。修正前的行為已記錄在 `services-list.md`（run `20261103T151820-0cg0`）。
+- 2026-11-03 實跑結果（cmux 在前景）：
+  - `agent-dot` PASS：`:18750` 橘點加鎖頭（run `20261103T153303-1ffx`）。
+  - `agent-lock` PASS：`check-lock` 三項 PASS（同一個 run）。
+  - `agent-bg-focus` **FAIL**：點 3 次都沒有切換（run `20261103T153100-wx3c`）。單元測試確認送出的 `surface_id` 是 agent 分頁的值，屬於 issue #2。
+  - 回歸 install、list、stop、`usage-row`、`wait-question` PASS（run `20261103T153223-vb2h`）。
+- 第一次實跑 `agent-dot` 與 `agent-lock` 時前景是 Google Chrome（run `20261103T153026-8e07`），結果不算數，已在 cmux 前景時重跑。
