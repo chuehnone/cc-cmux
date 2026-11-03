@@ -88,16 +88,20 @@ const waitingItems = () => {
       const question = a.status === "needs_input";
       const done = a.status === "idle" && tab?.hasUnread === true;
       if (!question && !done) continue;
+      const since = question ? a.sinceEpoch : a.lastActivityAt;
       out.push({
         key: "row:" + a.id,
         kind: "row",
+        rank: question ? 0 : 1,
+        since,
         text: w.title + " · " + tab?.title,
         label: question ? "問題" : "跑完",
         dot: question ? "#FF9F0A" : "#0A84FF",
-        wait: formatWait(now - (question ? a.sinceEpoch : a.lastActivityAt)),
+        wait: formatWait(now - since),
       });
     }
   }
+  out.sort((x, y) => x.rank - y.rank || x.since - y.since);
   return out.length ? [{ key: "header", kind: "header" }, ...out] : out;
 };
 

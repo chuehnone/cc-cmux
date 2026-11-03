@@ -271,3 +271,14 @@ test("等待時間：剛剛、N 分、N 小時、N 天，時間在未來時顯�
   assert.equal(waitFor(T - 86400), "1 天");
   assert.equal(waitFor(T + 30), "剛剛");
 });
+
+test("問題排在跑完前面，同一種依等待時間由長到短", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs(
+      [agent("idle", "P1", { lastActivityAt: T - 1200 }), agent("needs_input", "P2", { sinceEpoch: T - 60 }), agent("needs_input", "P3", { sinceEpoch: T - 300 })],
+      [wtab("P1", "done", true), wtab("P2", "q1"), wtab("P3", "q5")],
+    )],
+    clock: { epoch: T },
+  });
+  assert.deepEqual(s.waiting().map((w) => w.texts.slice(1).join(" ")), ["問題 5 分", "問題 1 分", "跑完 20 分"]);
+});
