@@ -338,3 +338,11 @@ test("超過 10 個在等時顯示 10 列，加一行還有 N 個", () => {
   assert.equal(s.waiting().length, 10);
   assert.ok(s.texts().includes("還有 2 個"));
 });
+
+test("沒有在等的 session 時，不顯示等你標題", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs([agent("working", "P1", { sinceEpoch: T - 60 })], [wtab("P1", "a")])],
+    clock: { epoch: T },
+  });
+  assert.ok(!s.texts().includes("等你"));
+});
