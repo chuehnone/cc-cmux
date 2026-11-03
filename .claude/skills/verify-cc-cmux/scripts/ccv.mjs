@@ -314,9 +314,9 @@ function waitRows(state) {
   const els = (ws.elements || []).filter((e) => e.role === "AXStaticText" && e.frame);
   const header = els.find((e) => e.label === "等你");
   if (!header) return [];
-  const end = els.filter((e) => /^:\d+$/.test(e.label || "") || e.label === "沒有偵測到監聽中的 port").map((e) => e.frame.y).filter((y) => y > header.frame.y);
+  const end = els.filter((e) => e.frame.x >= header.frame.x - 20).filter((e) => /^:\d+$/.test(e.label || "") || e.label === "沒有偵測到監聽中的 port").map((e) => e.frame.y).filter((y) => y > header.frame.y);
   const limit = end.length ? Math.min(...end) : Infinity;
-  const below = els.filter((e) => e.frame.y > header.frame.y + header.frame.h / 2 && e.frame.y < limit).sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+  const below = els.filter((e) => e.frame.x >= header.frame.x - 20 && e.frame.y > header.frame.y + header.frame.h / 2 && e.frame.y < limit).sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
   const rows = [];
   for (const e of below) {
     const last = rows[rows.length - 1];
@@ -367,6 +367,41 @@ function clickRow(text) {
   const selected = (cmuxTry("tree", "--window", state.windowId) || "").split("\n").filter((l) => /workspace .*\[selected\]/.test(l)).join(" ");
   log(state, "click-row " + JSON.stringify(matches[0].text) + " scale=" + scale + " frame=" + JSON.stringify(f) + " px=" + x + "," + y + " result=" + JSON.stringify(result) + " selected=" + selected + " preshot=" + shotFile);
   console.log("CLICKED ROW " + JSON.stringify(matches[0].text) + " px=" + x + "," + y + "\nSELECTED " + selected.trim());
+}
+
+const PROBE_SIDEBAR = `sidebar(() =>
+  VStack({ spacing: 2 }, [
+    ForEach(
+      { items: () => (data.workspaces() ?? []).filter((w) => (w.agents ?? []).length).flatMap((w) => [
+          { k: w.id, t: "PROBE WS " + JSON.stringify({ id: w.id, title: w.title }) },
+          ...(w.agents ?? []).map((a, i) => ({ k: w.id + "a" + i, t: "PROBE AGENT " + JSON.stringify({ id: a.id, kind: a.kind, status: a.status, panelId: a.panelId, surfaceId: a.surfaceId, sinceEpoch: a.sinceEpoch, lastActivityAt: a.lastActivityAt }) })),
+          ...(w.tabs ?? []).map((t, i) => ({ k: w.id + "t" + i, t: "PROBE TAB " + JSON.stringify({ id: t.id, surfaceId: t.surfaceId, title: t.title, hasUnread: t.hasUnread, focused: t.focused }) })),
+        ]), key: (x) => x.k },
+      (x) => Text(() => x().t).font(9)
+    ),
+  ])
+)
+`;
+
+async function probe() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const file = join(homedir(), ".config", "cmux", "sidebars", "cc-cmux-probe.js");
+  if (existsSync(file)) fail(file + " 已經存在，先確認它不是使用者的檔案");
+  writeFileSync(file, PROBE_SIDEBAR);
+  const lines = [];
+  try {
+    cmux("right-sidebar", "set", "custom", "cc-cmux-probe", "--window", state.windowId, "--no-focus");
+    await sleep(2500);
+    const ws = cua("get_window_state", { pid: state.appPid, window_id: state.cuaWindowId, include_screenshot: false });
+    for (const e of ws.elements || []) if (/^PROBE /.test(e.label || "")) lines.push(e.label.replace(/^PROBE /, ""));
+  } finally {
+    cmux("right-sidebar", "set", "custom", "services", "--window", state.windowId, "--no-focus");
+    rmSync(file);
+  }
+  writeFileSync(join(state.evidenceDir, "probe-" + Date.now() + ".txt"), now() + "\n" + lines.join("\n") + "\n");
+  log(state, "probe " + lines.length + " 行");
+  console.log(lines.length ? lines.join("\n") : "(沒有任何有 agent 的 workspace)");
 }
 
 function waitKill() {
@@ -795,9 +830,9 @@ async function cleanup(runId) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|cleanup [run]>");
   process.exit(2);
 }
 try {
