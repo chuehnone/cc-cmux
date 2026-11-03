@@ -323,7 +323,10 @@ function waitRows(state) {
     if (last && Math.abs(last.y - e.frame.y) < Math.max(4, e.frame.h / 2)) last.els.push(e);
     else rows.push({ y: e.frame.y, els: [e] });
   }
-  return rows.map((r) => ({ text: r.els.map((e) => e.label).join(" "), frame: r.els[0].frame }));
+  return rows.map((r) => {
+    const els = [...r.els].sort((a, b) => a.frame.x - b.frame.x);
+    return { text: els.map((e) => e.label).join(" "), frame: els[0].frame };
+  });
 }
 
 function waitRowsSafe(state) {
