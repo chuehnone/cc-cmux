@@ -312,3 +312,17 @@ test("needs_input 沒有 sinceEpoch 時，用 lastActivityAt 算等待時間", (
   });
   assert.equal(s.waiting()[0]?.texts[2], "3 分");
 });
+
+test("同一個分頁有兩筆 session 時，只顯示 lastActivityAt 較新的一筆", () => {
+  const s = loadSidebar("services", {
+    workspaces: [waitWs(
+      [
+        { ...agent("needs_input", "P1", { sinceEpoch: T - 900, lastActivityAt: T - 900 }), id: "old" },
+        { ...agent("idle", "P1", { lastActivityAt: T - 500 }), id: "new" },
+      ],
+      [wtab("P1", "a", true)],
+    )],
+    clock: { epoch: T },
+  });
+  assert.deepEqual(s.waiting().map((w) => w.texts.slice(1).join(" ")), ["跑完 8 分"]);
+});

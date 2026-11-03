@@ -83,7 +83,13 @@ const waitingItems = () => {
   for (const w of data.workspaces() ?? []) {
     const tabs = {};
     for (const t of w.tabs ?? []) tabs[t.id] = t;
+    const latest = {};
     for (const a of w.agents ?? []) {
+      if (a.status === "ended") continue;
+      const k = a.panelId ?? "id:" + a.id;
+      if (!latest[k] || latest[k].lastActivityAt < a.lastActivityAt) latest[k] = a;
+    }
+    for (const a of Object.values(latest)) {
       const tab = tabs[a.panelId];
       const question = a.status === "needs_input";
       const done = a.status === "idle" && tab?.hasUnread === true;
