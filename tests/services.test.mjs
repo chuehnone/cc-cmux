@@ -381,3 +381,8 @@ test("背景列跳轉：panelId 對不到、surfaceId 對到時，送該分頁�
   const s = loadSidebar("services", { workspaces: [bgWs([9000], [tab("p9", "claude", "p9", [])], [{ panelId: "p7", surfaceId: "p9" }])] });
   assert.deepEqual(s.tap(9000, "arrow.right.square").at(-1), { fn: "cmux", method: "surface.focus", params: { surface_id: "p9", workspace_id: "w1" } });
 });
+
+test("背景列跳轉：唯一 agent 對不到任何分頁時，改切 workspace", () => {
+  const s = loadSidebar("services", { workspaces: [bgWs([9000], [tab("p1", "server", "p1", [])], [{ panelId: "p7", surfaceId: "x7" }])] });
+  assert.deepEqual(s.tap(9000, "arrow.right.square").at(-1), { fn: "cmux", method: "workspace.select", params: { workspace_id: "w1" } });
+});
