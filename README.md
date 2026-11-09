@@ -127,6 +127,32 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 
 移除：從 statusline 腳本刪掉那一行。已寫入的 `progress` 可以用 `cmux clear-progress --workspace <workspace>` 清掉。
 
+### 顯示 CPU 與記憶體（選用）
+
+面板標題列下面、7d 列上面顯示整機 CPU 使用率與記憶體已用量，例如：
+
+```
+CPU 42% · 記憶體 33.6 / 48 GB
+```
+
+- CPU 與記憶體已用比例，任一項四捨五入後 85% 以上時，這一行變紅。
+- CPU 是兩次取樣之間的瞬間值，不是平均值。編譯時可能短暫變紅。
+- 記憶體已用量 = App（Anonymous − purgeable）+ wired + 壓縮，單位 GiB。檔案快取不算已用。
+- 超過 30 秒沒有新資料時，顯示 `系統狀況 已停止更新`。
+- 沒開監控程式時，不顯示這一行。
+
+資料來自 `monitor/system-stats.mjs`。它每 10 秒用 `os.cpus()` 算 CPU、用 `vm_stat` 算記憶體，再用 `cmux set-progress` 寫進自己所在 workspace 的 `progress`。理由：sidebar 不能執行程式，也沒有 CPU 與記憶體的欄位。寫在專用的 workspace，才不會和 7d 額度搶同一個 `progress`。
+
+啟動：在 cmux 執行這一行，開一個叫「系統」的 workspace。`<cc-cmux 的路徑>` 換成這個 repo 的絕對路徑。
+
+```sh
+cmux new-workspace --name 系統 --command "node <cc-cmux 的路徑>/monitor/system-stats.mjs"
+```
+
+停止：在「系統」分頁按 Ctrl+C，或關掉這個 workspace。程式結束前會清掉自己寫的 `progress`，面板那一行跟著消失。
+
+不要在「系統」workspace 開 Claude。理由：7d 額度也寫 `progress`，兩支程式會互相覆蓋。
+
 ### 已知限制
 
 - 面板只列出有開 port 的服務。背景執行但沒有開 port 的 shell（例如 build、test）不會出現。
@@ -147,6 +173,10 @@ printf '%s' "$input" | node <cc-cmux 的路徑>/statusline/report-rate-limit.mjs
 - 一個 workspace 只有一個 `progress`。其他工具呼叫 `set-progress` 時會互相覆蓋。個人帳號與公司帳號的 Claude 開在同一個 workspace 時也會互相覆蓋，面板只看得到最後寫入的帳號。
 - 7d 的已用百分比只在 Claude 有回應時更新。剩餘時間由面板依時鐘計算，不必等新資料。
 - cmux 不在前景時，7d 列一樣會更新。2026-11-02 實跑時，前景是別的 app，寫入後 5 秒內面板就更新了。
+- CPU 與記憶體那一行只看得到同一個 window 的「系統」workspace。
+- 記憶體已用量比活動監視器的「Memory Used」少約 1 GB，和它的 App Memory + Wired Memory + Compressed 相差 1 GB 以內（2026-11-09 實測）。「Memory Used」的算法 Apple 沒有公開。
+- 「系統」workspace 在左側欄會有一條記憶體用量的進度條，label 是 `cc-cmux:sys:...`。
+- cmux 重開後，要再執行一次啟動指令。cmux 還原 session 時會不會重跑監控程式，未驗證。
 - sidebar 不能執行 shell。所以面板不能依 port 直接 kill 程式，只能對分頁送 Ctrl+C。
 
 ## 維護

@@ -22,7 +22,7 @@
 - 本機 `top -l 2 -n 0` 印出 `CPU usage: 30.63% user, 11.98% sys, 57.37% idle`。這是所有核心合計的比例。
 - 本機 `sysctl hw.memsize` 是 51539607552（48 GiB）。
 - `top` 的 `PhysMem: 46G used` 包含檔案快取（`vm_stat` 的 File-backed 12.5 GiB），不能當已用量。
-- `vm_stat` 算出：Anonymous − purgeable 24.6 GiB、wired 3.7 GiB、壓縮 5.3 GiB，合計 33.64 GiB。活動監視器「已使用的記憶體」的算法 Apple 沒有公開，未查證。
+- `vm_stat` 算出：Anonymous − purgeable 24.6 GiB、wired 3.7 GiB、壓縮 5.3 GiB，合計 33.64 GiB。活動監視器「Memory Used」的算法 Apple 沒有公開，未查證。2026-11-09 實測，它比活動監視器自己的 App Memory + Wired Memory + Compressed 多約 1 GB。
 - Node 的 `os.cpus()` 回傳每顆核心的累計時間（user、nice、sys、idle、irq）。兩次取樣相減可算 CPU 使用率。和 `top` 是否一致，未實測。
 - 面板標題列與 7d 列在 `sidebars/services.js:131-141`。7d 的紅色是 `#FF453A`，門檻 85%，用四捨五入後的整數判斷（`sidebars/services.js:72-77`）。
 - `tests/harness.mjs` 模擬 `data.workspaces` 與 `data.clock`（`tests/harness.mjs:54`）。
@@ -41,12 +41,13 @@
 | 更新頻率 | 每 10 秒寫一次 | 夠反映狀況，又不會一直叫 `cmux`。 |
 | 管道 | 專用的「系統」workspace 跑 `monitor/system-stats.mjs`，寫自己 workspace 的 `progress` | 不和 7d 額度搶欄位，不蓋掉使用者的 workspace 說明，不改 repo 外的檔案。代價：左側欄多一個 workspace。 |
 | label 格式 | `cc-cmux:sys:<寫入時間>:<CPU%>:<已用 GiB>:<總量 GiB>`，`progress` 的值是已用／總量，夾在 0–1 | 面板只讀 label。進度條剛好顯示記憶體用量。 |
-| 記憶體算法 | (Anonymous − purgeable + wired + 壓縮) × page size，單位 GiB | 最可能和活動監視器一致。`top` 的 used 包含快取，幾乎永遠滿載。實跑時對照，差超過 1 GB 就回來討論。 |
+| 記憶體算法 | (Anonymous − purgeable + wired + 壓縮) × page size，單位 GiB | 最可能和活動監視器一致。`top` 的 used 包含快取，幾乎永遠滿載。實跑時對照，差超過 1 GB 就回來討論（實作時已討論，見「驗收的比較對象」）。 |
 | CPU 算法 | `os.cpus()` 兩次取樣相減，(總時間 − idle) ÷ 總時間 | 不用每 10 秒另外跑 `top`。 |
 | 停止後 | 收到 SIGINT、SIGTERM、SIGHUP 時先 `cmux clear-progress` 再結束；寫入時間超過 30 秒時顯示 `系統狀況 已停止更新` | 最危險的是程式停了、畫面還顯示舊數字。 |
 | 沒資料時 | 不顯示這一行 | 沒開「系統」workspace 就是不想看。 |
 | 啟動方式 | README 寫一行 `cmux new-workspace --name 系統 --command ...` | 使用者自己決定要不要開。 |
 | 修正範例值（實作時） | 資料流範例的已用量由 33.69 改成 33.64，`progress` 存的值改成兩位小數 | 規劃時沒有從 `vm_stat` 頁數重算，實作第 8 條測試時發現。`sidebar-state` 的兩位小數是 `ccv sys-set` 實跑看到的。 |
+| 驗收的比較對象（實作時） | 和活動監視器的 App Memory + Wired Memory + Compressed 比，不和「Memory Used」比。算法維持 A | 2026-11-09 同時讀三次，A 和「Memory Used」差 0.99–1.55 GB。活動監視器自己的三項和也比「Memory Used」少約 1 GB，「Memory Used」的算法未查證。另一個算法（總量 − free − 檔案快取 − purgeable − speculative）差 0.16–0.84 GB，但那是用三個樣本湊出來的。使用者選保留 A。代價：面板的數字一直比「Memory Used」少約 1 GB。 |
 
 ## 成功條件
 
@@ -57,7 +58,7 @@
 5. 沒有任何 `cc-cmux:sys:` 資料時，不畫這一行。
 6. 監控程式在 cmux 裡執行時，10 秒內該 workspace 的 `cmux sidebar-state` 出現 `progress=`，label 以 `cc-cmux:sys:` 開頭，之後每 10 秒寫一次。
 7. 監控程式收到 SIGINT 後，該 workspace 的 `sidebar-state` 不再有 `cc-cmux:sys:` 的 progress，面板這一行消失。
-8. 記憶體已用量和活動監視器「已使用的記憶體」相差 1 GB 以內。
+8. 記憶體已用量和活動監視器的 App Memory + Wired Memory + Compressed 相差 1 GB 以內。不和「Memory Used」比。
 9. 現有的 7d 列、等你區、port 列、按鈕與測試行為不變。
 
 ## 邊界情況

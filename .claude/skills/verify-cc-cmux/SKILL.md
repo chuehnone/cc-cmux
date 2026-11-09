@@ -180,7 +180,12 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 | `ccv click <open\|focus\|stop> agent` | 點 agent 分頁那一列的按鈕 |
 | `ccv check-focus` | 按下跳轉後檢查：點擊前起算 5 秒內，有沒有切到目標 workspace 的 `workspace.selected` 事件。判斷跳轉一律用它，不要看 `cmux tree`，tree 的選取可能落後實際畫面十幾秒 |
 | `ccv check-lock` | 按下鎖頭後檢查：畫面沒有 `^C`、Claude 還在、port 還在 LISTEN |
-| `ccv capture <label>` | 存截圖和狀態。另外記錄面板的 7d 列與每個 workspace 的 `progress=` |
+| `ccv capture <label>` | 存截圖和狀態。另外記錄面板的 7d 列、系統列與每個 workspace 的 `progress=` |
+| `ccv sys-start` | 在本次 run 的 window 用 README 的啟動指令開「系統」workspace，執行 `monitor/system-stats.mjs`。等 `sidebar-state` 出現 `cc-cmux:sys:` 並找到監控程式的 PID，才回報 `SYS READY`。最多等 30 秒 |
+| `ccv sys-rows` | 列出面板上以 `CPU ` 或 `系統狀況` 開頭的文字 |
+| `ccv sys-set <CPU%> <已用GiB> <總量GiB> [距今秒數]` | 不跑監控程式，直接用 `cmux set-progress` 寫一筆 `cc-cmux:sys:` 測試 label 到 server 的 workspace |
+| `ccv sys-stop <int\|kill>` | `int` 對「系統」分頁送 Ctrl+C；`kill` 對 `sys-start` 記錄的監控程式送 SIGKILL |
+| `ccv sys-compare` | 讀活動監視器 Memory 分頁的 App、Wired、Compressed，和 label 的已用 GiB 比，差 1 GB 以內印 `PASS`。截圖存成 `sys-compare.png`。活動監視器要停在 Memory 分頁 |
 | `ccv cleanup [run]` | 收掉這個 run 開的東西，保留證據 |
 
 不帶 `[run]` 時，用 `latest` 記錄的 run。

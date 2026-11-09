@@ -1015,23 +1015,9 @@ function sysSet(cpu, used, total, ago = "0") {
   console.log("SYS SET workspace=" + state.serverWorkspace + " " + line);
 }
 
-function workspaceSurface(state, workspace) {
-  const lines = workspaceTree(state).split("\n");
-  const start = lines.findIndex((l) => l.includes(workspace + " "));
-  if (start < 0) return null;
-  for (const l of lines.slice(start + 1)) {
-    if (/workspace workspace:/.test(l)) break;
-    const m = l.match(/surface (surface:\d+)/);
-    if (m) return { ref: m[1], tty: (l.match(/tty=(\S+)/) || [])[1] || null };
-  }
-  return null;
-}
-
-function monitorPid(tty) {
-  if (!tty) return null;
-  const out = sh("ps", ["-t", tty.replace(/^\/dev\//, ""), "-o", "pid=,command="], { allowFail: true }) || "";
-  const line = out.split("\n").find((l) => l.includes("monitor/system-stats.mjs") && !l.includes(" -c "));
-  return line ? Number(line.trim().split(/\s+/)[0]) : null;
+function monitorPids() {
+  const out = sh("ps", ["-axo", "pid=,command="], { allowFail: true }) || "";
+  return out.split("\n").filter((l) => l.includes(join(REPO, "monitor", "system-stats.mjs")) && !l.includes(" -c ")).map((l) => Number(l.trim().split(/\s+/)[0]));
 }
 
 async function sysStart() {
@@ -1039,6 +1025,7 @@ async function sysStart() {
   if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
   if (state.sys?.pid && sh("ps", ["-o", "pid=", "-p", String(state.sys.pid)], { allowFail: true })) fail("這個 run 的監控程式還在執行：" + state.sys.pid);
   const command = "node " + JSON.stringify(join(REPO, "monitor", "system-stats.mjs"));
+  const before = new Set(monitorPids());
   const ws = cmux("new-workspace", "--window", state.windowId, "--name", "系統-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
   if (!ws) fail("new-workspace 沒回傳 workspace ref");
   state.sys = { workspace: ws[1], command };
@@ -1050,11 +1037,10 @@ async function sysStart() {
   let line = "";
   while (Date.now() - t0 < 30000) {
     line = progressLine(ws[1]);
-    const surface = workspaceSurface(state, ws[1]);
-    const pid = monitorPid(surface?.tty);
-    if (pid && !state.sys.pid) {
-      state.sys.pid = pid;
-      state.sys.tty = surface.tty;
+    const fresh = monitorPids().filter((p) => !before.has(p));
+    if (fresh.length > 1) fail("啟動後出現 " + fresh.length + " 個新的監控程式，分不出哪一個是這個 run 的：" + fresh.join(", "));
+    if (fresh.length === 1 && !state.sys.pid) {
+      state.sys.pid = fresh[0];
       saveState(state);
     }
     if (line.includes("cc-cmux:sys:") && state.sys.pid) {
@@ -1099,14 +1085,29 @@ function sysCompare() {
   if (!win) fail("活動監視器沒有主視窗");
   const line = progressLine(state.sys.workspace);
   const ws = cua("get_window_state", { pid: app.pid, window_id: win.window_id, include_screenshot: false, max_elements: 5000 });
-  const statics = (ws.elements || []).filter((e) => e.role === "AXStaticText").map((e) => e.label || e.value || "");
-  const at = statics.indexOf("Memory Used:");
-  const texts = at >= 0 ? statics.slice(at - 2, at + 14) : [];
+  const statics = (ws.elements || []).filter((e) => e.role === "AXStaticText" && e.frame);
+  const text = (e) => e.label || e.value || "";
+  const valueOf = (name) => {
+    const label = statics.find((e) => text(e) === name);
+    if (!label) return null;
+    const v = statics.filter((e) => e !== label && Math.abs(e.frame.y - label.frame.y) < 6 && e.frame.x > label.frame.x && / GB$/.test(text(e))).sort((x, y) => x.frame.x - y.frame.x)[0];
+    return v ? Number(text(v).replace(/[^\d.]/g, "")) : null;
+  };
+  const am = { app: valueOf("App Memory:"), wired: valueOf("Wired Memory:"), compressed: valueOf("Compressed:"), used: valueOf("Memory Used:") };
+  const usedLabel = Number((line.match(/cc-cmux:sys:\d+:[\d.]+:([\d.]+):/) || [])[1]);
+  const sum = am.app + am.wired + am.compressed;
+  const ok = [am.app, am.wired, am.compressed, usedLabel].every((n) => Number.isFinite(n) && n !== null);
+  const diff = Math.abs(usedLabel - sum);
+  const texts = [
+    "活動監視器 App " + am.app + " + Wired " + am.wired + " + Compressed " + am.compressed + " = " + (ok ? sum.toFixed(2) : "?") + " GB（Memory Used " + am.used + " GB，不比較）",
+    "label 已用 " + usedLabel + " GiB",
+    ok ? (diff <= 1 ? "PASS" : "FAIL") + " 差 " + diff.toFixed(2) + " GB" : "FAIL 讀不到活動監視器的值，確認它在 Memory 分頁",
+  ];
   sh("screencapture", ["-x", "-o", "-l", String(win.window_id), join(state.evidenceDir, "sys-compare.png")], { allowFail: true });
   const memLines = (sh("vm_stat", [], { allowFail: true }) || "").split("\n").filter((l) => /Anonymous|purgeable|wired|occupied by compressor|page size/.test(l));
   writeFileSync(join(state.evidenceDir, "sys-compare.txt"), now() + "\n" + line + "\n\n## 活動監視器 AX 文字\n" + (texts.join("\n") || "(沒有)") + "\n\n## vm_stat\n" + memLines.join("\n") + "\n");
   log(state, "sys-compare " + line);
-  console.log("SYS COMPARE " + line + "\n" + (texts.join("\n") || "(活動監視器 AX 沒有 Memory Used，確認它在 Memory 分頁，再看 sys-compare.png)"));
+  console.log("SYS COMPARE " + line + "\n" + texts.join("\n"));
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
