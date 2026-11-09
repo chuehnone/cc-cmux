@@ -408,3 +408,10 @@ test("有系統資料時，在 7d 列上面顯示 CPU 與記憶體", () => {
   const texts = s.texts();
   assert.ok(texts.indexOf("CPU 42% · 記憶體 33.7 / 48 GB") < texts.findIndex((t) => /^個人 7d /.test(t ?? "")));
 });
+
+test("CPU 或記憶體四捨五入後 85% 以上時變紅，都低於 85% 時維持灰色", () => {
+  const color = (cpu, used) => sysLines(loadSidebar("services", { workspaces: [sysWs("w1", NOW, cpu, used, "48.00")], clock: { epoch: NOW } }))[0];
+  assert.deepEqual(color("84.6", "24.00"), { text: "CPU 85% · 記憶體 24.0 / 48 GB", color: "#FF453A" });
+  assert.equal(color("84.4", "40.70").color, "#FF453A");
+  assert.equal(color("84.4", "40.00").color, "secondary");
+});

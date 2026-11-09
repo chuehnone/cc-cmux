@@ -83,10 +83,12 @@ const sysRows = () => {
     latest = { writtenAt, cpu, used, total };
   }
   if (!latest) return [];
+  const cpu = Math.round(latest.cpu);
+  const mem = Math.round((latest.used / latest.total) * 100);
   return [{
     key: "sys",
-    text: "CPU " + Math.round(latest.cpu) + "% · 記憶體 " + latest.used.toFixed(1) + " / " + Math.round(latest.total) + " GB",
-    color: "secondary",
+    text: "CPU " + cpu + "% · 記憶體 " + latest.used.toFixed(1) + " / " + Math.round(latest.total) + " GB",
+    color: cpu >= 85 || mem >= 85 ? "#FF453A" : "secondary",
   }];
 };
 
