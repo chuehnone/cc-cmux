@@ -427,3 +427,29 @@ test("寫入時間超過 30 秒時顯示已停止更新，剛好 30 秒時照常
   assert.deepEqual(at(31), [{ text: "系統狀況 已停止更新", color: "tertiary" }]);
   assert.deepEqual(at(30), [{ text: "CPU 42% · 記憶體 33.7 / 48 GB", color: "secondary" }]);
 });
+
+test("兩個 workspace 都有系統資料時，取寫入時間較新的一筆", () => {
+  const s = loadSidebar("services", { workspaces: [sysWs("w1", NOW - 10, "10.0", "20.00", "48.00"), sysWs("w2", NOW, "42.3", "33.69", "48.00"), sysWs("w3", NOW - 5, "50.0", "30.00", "48.00")], clock: { epoch: NOW } });
+  assert.deepEqual(sysLines(s).map((l) => l.text), ["CPU 42% · 記憶體 33.7 / 48 GB"]);
+});
+
+test("系統 label 欄位數不對或有非數字時略過", () => {
+  const bad = (id, label) => ({ id, title: id, tabs: [], progress: { value: 0.5, label } });
+  const s = loadSidebar("services", {
+    workspaces: [
+      bad("w1", "cc-cmux:sys:x:1:2:3"),
+      bad("w2", "cc-cmux:sys:" + NOW + ":1:2"),
+      bad("w3", "cc-cmux:sys:" + NOW + ":1::48"),
+      bad("w4", "cc-cmux:sys:" + (NOW + 100) + ":abc:2:48"),
+      sysWs("w5", NOW - 1, "12.0", "20.00", "48.00"),
+    ],
+    clock: { epoch: NOW },
+  });
+  assert.deepEqual(sysLines(s).map((l) => l.text), ["CPU 12% · 記憶體 20.0 / 48 GB"]);
+});
+
+test("同時有系統資料與 7d 資料時，兩種列都畫，7d 列文字不變", () => {
+  const s = loadSidebar("services", { workspaces: [sysWs("w1", NOW, "42.3", "33.69", "48.00"), usageWs("w2", "personal", DAY, 50), usageWs("w3", "work", DAY, 31)], clock: { epoch: NOW } });
+  assert.equal(sysLines(s).length, 1);
+  assert.deepEqual(s.usage().map((u) => u.text), ["個人 7d 剩 1 天 0 小時 · 已用 50%", "公司 7d 剩 1 天 0 小時 · 已用 31%"]);
+});

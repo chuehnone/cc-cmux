@@ -78,6 +78,7 @@ const sysRows = () => {
   for (const w of data.workspaces() ?? []) {
     const parts = (w.progress?.label ?? "").split(":");
     if (parts.length !== 6 || parts[0] !== "cc-cmux" || parts[1] !== "sys") continue;
+    if (!parts.slice(2).every((n) => n !== "" && Number.isFinite(Number(n)))) continue;
     const [writtenAt, cpu, used, total] = parts.slice(2).map(Number);
     if (latest && latest.writtenAt >= writtenAt) continue;
     latest = { writtenAt, cpu, used, total };
