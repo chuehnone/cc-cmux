@@ -721,6 +721,7 @@ function capture(label) {
   sec("panel row :" + state.port, row ? "present " + JSON.stringify(row.frame) : "absent");
   sec("status_count", ((cmuxTry("sidebar-state", "--workspace", state.serverWorkspace) || "").match(/^status_count=.*$/m) || ["(無)"])[0]);
   sec("usage rows", usageRowsSafe(state).join("\n") || "(面板沒有 7d 列)");
+  sec("sys rows", sysRowsSafe(state).join("\n") || "(面板沒有系統列)");
   sec("wait rows", waitRowsSafe(state).join("\n") || "(沒有等你區)");
   sec("wait notifications", runNotifications(state).map((n) => n.workspaceId + " " + n.state + " " + n.title + " " + n.at).join("\n") || "(無)");
   sec("usage progress", usageWorkspaces(state).map(([k, ws]) => k + " " + ws + " " + progressLine(ws)).join("\n"));
@@ -945,6 +946,16 @@ async function cleanup(runId) {
       lines.push(name + " " + pid + " 已結束");
     }
   }
+  if (state.sys?.pid) {
+    for (let i = 0; i < 20 && sh("ps", ["-o", "pid=", "-p", String(state.sys.pid)], { allowFail: true }); i++) await sleep(250);
+    const cmd = sh("ps", ["-o", "command=", "-p", String(state.sys.pid)], { allowFail: true });
+    if (cmd && cmd.includes("monitor/system-stats.mjs")) {
+      process.kill(state.sys.pid, "SIGTERM");
+      lines.push("SIGTERM " + state.sys.pid + "（這個 run 啟動的監控程式）");
+    } else {
+      lines.push("監控程式 " + state.sys.pid + " 已結束");
+    }
+  }
   const bgPids = [...(state.bg?.serverPids || [state.bg?.serverPid]).map((p) => ["bg server", p]), ...(state.bg?.agentPids || [state.bg?.agentPid]).map((p) => ["agent", p])];
   for (const [name, pid] of bgPids) {
     if (!pid) continue;
@@ -967,10 +978,140 @@ async function cleanup(runId) {
   console.log(lines.join("\n"));
 }
 
+const SYS_TEXT = /^(CPU |系統狀況)/;
+
+function sysRows(state) {
+  const ws = cua("get_window_state", { pid: state.appPid, window_id: state.cuaWindowId, include_screenshot: false });
+  return (ws.elements || []).filter((e) => e.role === "AXStaticText" && SYS_TEXT.test(e.label || "")).sort((a, b) => (a.frame?.y ?? 0) - (b.frame?.y ?? 0)).map((e) => e.label);
+}
+
+function sysRowsSafe(state) {
+  try {
+    return sysRows(state);
+  } catch (e) {
+    return ["(讀取失敗：" + e.message + ")"];
+  }
+}
+
+function sysRowsCmd() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const rows = sysRows(state);
+  log(state, "sys-rows " + JSON.stringify(rows));
+  console.log(rows.length ? rows.join("\n") : "(面板沒有系統列)");
+}
+
+function sysSet(cpu, used, total, ago = "0") {
+  const state = loadState();
+  if (![cpu, used, total, ago].every((n) => n !== undefined && Number.isFinite(Number(n)))) fail("用法：ccv.mjs sys-set <CPU%> <已用GiB> <總量GiB> [距今秒數]");
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  const writtenAt = Math.floor(Date.now() / 1000) - Number(ago);
+  const label = ["cc-cmux", "sys", writtenAt, Number(cpu).toFixed(1), Number(used).toFixed(2), Number(total).toFixed(2)].join(":");
+  const value = Math.min(1, Math.max(0, Number(used) / Number(total)));
+  cmux("set-progress", String(value), "--label", label, "--workspace", state.serverWorkspace);
+  const line = progressLine(state.serverWorkspace);
+  log(state, "sys-set workspace=" + state.serverWorkspace + " " + line);
+  if (!line.includes(label)) fail("寫入後 " + state.serverWorkspace + " 的 sidebar-state 沒有預期的 label：" + line);
+  console.log("SYS SET workspace=" + state.serverWorkspace + " " + line);
+}
+
+function workspaceSurface(state, workspace) {
+  const lines = workspaceTree(state).split("\n");
+  const start = lines.findIndex((l) => l.includes(workspace + " "));
+  if (start < 0) return null;
+  for (const l of lines.slice(start + 1)) {
+    if (/workspace workspace:/.test(l)) break;
+    const m = l.match(/surface (surface:\d+)/);
+    if (m) return { ref: m[1], tty: (l.match(/tty=(\S+)/) || [])[1] || null };
+  }
+  return null;
+}
+
+function monitorPid(tty) {
+  if (!tty) return null;
+  const out = sh("ps", ["-t", tty.replace(/^\/dev\//, ""), "-o", "pid=,command="], { allowFail: true }) || "";
+  const line = out.split("\n").find((l) => l.includes("monitor/system-stats.mjs") && !l.includes(" -c "));
+  return line ? Number(line.trim().split(/\s+/)[0]) : null;
+}
+
+async function sysStart() {
+  const state = loadState();
+  if (!windowExists(state.windowId)) fail("這個 run 的 window 不在了");
+  if (state.sys?.pid && sh("ps", ["-o", "pid=", "-p", String(state.sys.pid)], { allowFail: true })) fail("這個 run 的監控程式還在執行：" + state.sys.pid);
+  const command = "node " + JSON.stringify(join(REPO, "monitor", "system-stats.mjs"));
+  const ws = cmux("new-workspace", "--window", state.windowId, "--name", "系統-" + state.runId, "--command", command).match(/OK (workspace:\d+)/);
+  if (!ws) fail("new-workspace 沒回傳 workspace ref");
+  state.sys = { workspace: ws[1], command };
+  state.usage = state.usage || { workspaces: {} };
+  state.usage.workspaces["sys-" + Object.keys(state.usage.workspaces).length] = ws[1];
+  saveState(state);
+  log(state, "sys-start workspace=" + ws[1] + " command=" + command);
+  const t0 = Date.now();
+  let line = "";
+  while (Date.now() - t0 < 30000) {
+    line = progressLine(ws[1]);
+    const surface = workspaceSurface(state, ws[1]);
+    const pid = monitorPid(surface?.tty);
+    if (pid && !state.sys.pid) {
+      state.sys.pid = pid;
+      state.sys.tty = surface.tty;
+      saveState(state);
+    }
+    if (line.includes("cc-cmux:sys:") && state.sys.pid) {
+      log(state, "sys-start ready after=" + (Date.now() - t0) + "ms pid=" + state.sys.pid + " " + line);
+      console.log("SYS READY workspace=" + ws[1] + " pid=" + state.sys.pid + " " + line);
+      return;
+    }
+    await sleep(1000);
+  }
+  writeFileSync(join(state.evidenceDir, "sys-start-timeout.txt"), now() + "\n" + line + "\n\n" + (cmuxTry("read-screen", "--workspace", ws[1], "--lines", "40") || "(read-screen 失敗)") + "\n");
+  log(state, "sys-start timeout " + line);
+  fail("30 秒內 " + ws[1] + " 沒有 cc-cmux:sys: 的 progress 或找不到監控程式。畫面存在 sys-start-timeout.txt");
+}
+
+function sysStop(mode) {
+  const state = loadState();
+  if (mode !== "int" && mode !== "kill") fail("用法：ccv.mjs sys-stop <int|kill>");
+  if (!state.sys?.workspace) fail("先執行 ccv.mjs sys-start");
+  if (mode === "int") {
+    cmux("send-key", "--workspace", state.sys.workspace, "ctrl+c");
+    log(state, "sys-stop int workspace=" + state.sys.workspace);
+  } else {
+    const pid = state.sys.pid;
+    const cmd = pid ? sh("ps", ["-o", "command=", "-p", String(pid)], { allowFail: true }) : null;
+    if (!cmd || !cmd.includes("monitor/system-stats.mjs")) fail("PID " + pid + " 不是監控程式或已結束：" + cmd);
+    process.kill(pid, "SIGKILL");
+    log(state, "sys-stop kill SIGKILL " + pid);
+  }
+  console.log("SYS STOP " + mode + " workspace=" + state.sys.workspace);
+}
+
+function sysCompare() {
+  const state = loadState();
+  if (!state.sys?.workspace) fail("先執行 ccv.mjs sys-start");
+  sh("open", ["-g", "-a", "Activity Monitor"]);
+  execFileSync("sleep", ["2"]);
+  const bundle = "com.apple.ActivityMonitor";
+  const app = (cua("list_apps", {}).apps || []).find((a) => a.bundle_id === bundle && a.running);
+  if (!app) fail("找不到執行中的活動監視器");
+  const win = (cua("list_windows", { pid: app.pid }).windows || [])[0];
+  if (!win) fail("活動監視器沒有 window");
+  const line = progressLine(state.sys.workspace);
+  const ws = cua("get_window_state", { pid: app.pid, window_id: win.window_id, include_screenshot: true });
+  const texts = (ws.elements || []).filter((e) => /記憶體|GB|Memory/.test((e.label || "") + " " + (e.value || ""))).map((e) => e.role + " " + JSON.stringify(e.label || "") + " " + JSON.stringify(e.value || ""));
+  const shot = ws.screenshot_path || ws.screenshot?.path || null;
+  if (shot && existsSync(shot)) execFileSync("cp", [shot, join(state.evidenceDir, "sys-compare.png")]);
+  else sh("screencapture", ["-x", "-l", String(win.window_id), join(state.evidenceDir, "sys-compare.png")], { allowFail: true });
+  const memLines = (sh("vm_stat", [], { allowFail: true }) || "").split("\n").filter((l) => /Anonymous|purgeable|wired|occupied by compressor|page size/.test(l));
+  writeFileSync(join(state.evidenceDir, "sys-compare.txt"), now() + "\n" + line + "\n\n## 活動監視器 AX 文字\n" + (texts.join("\n") || "(沒有)") + "\n\n## vm_stat\n" + memLines.join("\n") + "\n");
+  log(state, "sys-compare " + line);
+  console.log("SYS COMPARE " + line + "\n" + (texts.join("\n") || "(活動監視器 AX 沒有記憶體文字，看 sys-compare.png)"));
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "agent-tab-start": agentTabStart, "check-lock": checkLock, "check-focus": checkFocus, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), cleanup: () => cleanup(rest[0]) };
+const commands = { launch, doctor: () => doctor(rest[0]), click: () => click(rest[0], rest[1]), "bg-start": () => bgStart(rest), "bg-kill": () => bgKill(rest[0]), capture: () => capture(rest[0]), "wait-row": () => waitRow(rest[0]), "check-stop": checkStop, "usage-set": () => usageSet(rest[0], rest[1], rest[2]), "usage-rows": usageRowsCmd, "wait-start": () => waitStart(rest[0]), "wait-rows": waitRowsCmd, "click-row": () => clickRow(rest.join(" ")), "wait-kill": waitKill, probe, "agent-tab-start": agentTabStart, "check-lock": checkLock, "check-focus": checkFocus, "usage-live": () => usageLive(rest[0] === "work" ? "work" : rest[0] === undefined ? "personal" : rest[0]), "sys-rows": sysRowsCmd, "sys-set": () => sysSet(rest[0], rest[1], rest[2], rest[3]), "sys-start": sysStart, "sys-stop": () => sysStop(rest[0]), "sys-compare": sysCompare, cleanup: () => cleanup(rest[0]) };
 if (!commands[cmd]) {
-  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg|agent]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|agent-tab-start|check-lock|check-focus|cleanup [run]>");
+  console.error("用法：ccv.mjs <launch|doctor [run]|click <open|focus|stop> [bg|agent]|bg-start [--with-hook] [--count N]|bg-kill <編號>|capture <label>|wait-row <present|absent>|check-stop|usage-set <personal|work> <已用%> <距重置秒數>|usage-rows|usage-live [work]|wait-start <question|done>|wait-rows|click-row <文字>|wait-kill|probe|agent-tab-start|check-lock|check-focus|sys-start|sys-rows|sys-set <CPU%> <已用GiB> <總量GiB> [距今秒數]|sys-stop <int|kill>|sys-compare|cleanup [run]>");
   process.exit(2);
 }
 try {

@@ -73,6 +73,23 @@ const usageRows = () => {
   });
 };
 
+const sysRows = () => {
+  let latest = null;
+  for (const w of data.workspaces() ?? []) {
+    const parts = (w.progress?.label ?? "").split(":");
+    if (parts.length !== 6 || parts[0] !== "cc-cmux" || parts[1] !== "sys") continue;
+    const [writtenAt, cpu, used, total] = parts.slice(2).map(Number);
+    if (latest && latest.writtenAt >= writtenAt) continue;
+    latest = { writtenAt, cpu, used, total };
+  }
+  if (!latest) return [];
+  return [{
+    key: "sys",
+    text: "CPU " + Math.round(latest.cpu) + "% · 記憶體 " + latest.used.toFixed(1) + " / " + Math.round(latest.total) + " GB",
+    color: "secondary",
+  }];
+};
+
 const formatWait = (sec) => {
   if (!(sec >= 60)) return "剛剛";
   if (sec < 3600) return Math.floor(sec / 60) + " 分";
@@ -134,6 +151,10 @@ sidebar(() =>
       Spacer(),
       Text(() => String(rows().length)).font(11).color("tertiary"),
     ]).paddingHorizontal(10).paddingVertical(6),
+    ForEach(
+      { items: sysRows, key: (r) => r.key },
+      (r) => Text(() => r().text).font(11).color(() => r().color).paddingHorizontal(10)
+    ),
     ForEach(
       { items: usageRows, key: (u) => u.account },
       (u) => Text(() => u().text).font(11).color(() => u().color).paddingHorizontal(10)

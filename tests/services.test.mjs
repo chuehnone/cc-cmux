@@ -386,3 +386,25 @@ test("背景列跳轉：唯一 agent 對不到任何分頁時，改切 workspace
   const s = loadSidebar("services", { workspaces: [bgWs([9000], [tab("p1", "server", "p1", [])], [{ panelId: "p7", surfaceId: "x7" }])] });
   assert.deepEqual(s.tap(9000, "arrow.right.square").at(-1), { fn: "cmux", method: "workspace.select", params: { workspace_id: "w1" } });
 });
+
+const sysWs = (id, writtenAt, cpu, used, total) => ({
+  id, title: "系統", tabs: [],
+  progress: { value: Math.min(1, used / total), label: ["cc-cmux", "sys", writtenAt, cpu, used, total].join(":") },
+});
+const sysLines = (s) => {
+  const out = [];
+  const walk = (n) => {
+    if (!n) return;
+    if (n.type === "Text" && /^(CPU |系統狀況)/.test(n.value ?? "")) out.push({ text: n.value, color: n.color });
+    for (const c of n.children ?? []) walk(c);
+  };
+  walk(s.view());
+  return out;
+};
+
+test("有系統資料時，在 7d 列上面顯示 CPU 與記憶體", () => {
+  const s = loadSidebar("services", { workspaces: [sysWs("w1", NOW, "42.3", "33.69", "48.00"), usageWs("w2", "personal", DAY, 50)], clock: { epoch: NOW + 5 } });
+  assert.deepEqual(sysLines(s), [{ text: "CPU 42% · 記憶體 33.7 / 48 GB", color: "secondary" }]);
+  const texts = s.texts();
+  assert.ok(texts.indexOf("CPU 42% · 記憶體 33.7 / 48 GB") < texts.findIndex((t) => /^個人 7d /.test(t ?? "")));
+});
