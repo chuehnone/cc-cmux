@@ -52,3 +52,4 @@
 | 列出在等使用者的 Claude session | [services-waiting.md](./services-waiting.md) | 已實跑（2026-11-03，cmux 在前景）：wait-question、wait-done、wait-focus PASS；wait-crash 已記錄 |
 | agent 分頁的橘點、鎖頭與背景列跳轉 | [services-agent-tab.md](./services-agent-tab.md) | 已實跑（2026-11-03，cmux 在前景）：agent-dot、agent-lock、agent-bg-focus PASS |
 | 用 cmux 事件判斷跳轉 | [focus-check.md](./focus-check.md) | 已實跑（2026-11-03，cmux 在前景）：focus-tab、focus-bg PASS；focus-negative 如預期 FAIL |
+| 顯示電腦的 CPU 與記憶體 | [system-stats.md](./system-stats.md) | 未實跑 |
