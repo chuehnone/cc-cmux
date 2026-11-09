@@ -100,6 +100,27 @@
 | 在「系統」workspace 開 Claude | statusline 也寫這個 workspace | 兩支程式輪流 `set-progress` | 後寫入的那一筆 | 可能是 `cc-cmux:7d:` 或 `cc-cmux:sys:` | 這一行與那個帳號的 7d 列輪流出現或消失 |
 | 不同 window | 監控程式在 window 2 | `set-progress --workspace <window 2 的 workspace>` | window 2 的 workspace 有值 | window 1 的面板拿不到 window 2 的 workspace | window 1 不畫這一行 |
 
+### 數字的來源
+
+```sh
+node -e 'const G=1024**3,ps=16384;const used=(1614155-9515+260475+339368)*ps/G;const total=51539607552/G;console.log("已用",used.toFixed(2),"總量",total.toFixed(2),"比例",(used/total).toFixed(4),"畫面",used.toFixed(1),Math.round(total));console.log("記憶體85%",(41/48*100).toFixed(1),"超出",(50/48).toFixed(4))'
+```
+
+輸出：
+
+```
+已用 33.64 總量 48.00 比例 0.7008 畫面 33.6 48
+記憶體85% 85.4 超出 1.0417
+```
+
+- 「正常」列的 33.64、`set-progress 0.7008`、畫面 `33.6 / 48 GB` 來自第一行。
+- 「記憶體 ≥ 85%」列的 85.4 與「已用比例超出 0–1」列夾成 1，來自第二行。
+- 「cmux 存的值」的兩位小數，來自 2026-11-09 `ccv sys-set 42.3 33.69 48` 實跑後的 `sidebar-state`：
+
+```
+progress=0.70 cc-cmux:sys:1794208399:42.3:33.69:48.00
+```
+
 ## 改動範圍
 
 | 檔案 | 改什麼 |
