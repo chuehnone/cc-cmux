@@ -83,6 +83,7 @@ const sysRows = () => {
     latest = { writtenAt, cpu, used, total };
   }
   if (!latest) return [];
+  if ((data.clock()?.epoch ?? 0) - latest.writtenAt > 30) return [{ key: "sys", text: "系統狀況 已停止更新", color: "tertiary" }];
   const cpu = Math.round(latest.cpu);
   const mem = Math.round((latest.used / latest.total) * 100);
   return [{

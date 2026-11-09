@@ -415,3 +415,15 @@ test("CPU 或記憶體四捨五入後 85% 以上時變紅，都低於 85% 時維
   assert.equal(color("84.4", "40.70").color, "#FF453A");
   assert.equal(color("84.4", "40.00").color, "secondary");
 });
+
+test("沒有系統資料時不畫系統列，7d 列照舊", () => {
+  const s = loadSidebar("services", { workspaces: [usageWs("w2", "personal", DAY, 50)], clock: { epoch: NOW } });
+  assert.deepEqual(sysLines(s), []);
+  assert.deepEqual(s.usage().map((u) => u.text), ["個人 7d 剩 1 天 0 小時 · 已用 50%"]);
+});
+
+test("寫入時間超過 30 秒時顯示已停止更新，剛好 30 秒時照常顯示數字", () => {
+  const at = (age) => sysLines(loadSidebar("services", { workspaces: [sysWs("w1", NOW - age, "42.3", "33.69", "48.00")], clock: { epoch: NOW } }));
+  assert.deepEqual(at(31), [{ text: "系統狀況 已停止更新", color: "tertiary" }]);
+  assert.deepEqual(at(30), [{ text: "CPU 42% · 記憶體 33.7 / 48 GB", color: "secondary" }]);
+});
