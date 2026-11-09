@@ -5,6 +5,8 @@ import { join } from "node:path";
 const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const TEMPLATE = join(ROOT, ".claude/skills/plan-cc-cmux/spec-template.md");
 const MUST_BE_EMPTY = "未決問題";
+const DATA_FLOW = "資料流範例";
+const NUMBER_SOURCE = "數字的來源";
 
 const sections = (src) => {
   const out = new Map();
@@ -35,6 +37,12 @@ export function checkSpec(src, template) {
     if (name === MUST_BE_EMPTY && body) errors.push("「## " + name + "」要是空的");
     if (name !== MUST_BE_EMPTY && !body) errors.push("「## " + name + "」是空的");
     if (got.get(name).some((l) => placeholders.has(l.trim()))) errors.push("「## " + name + "」還有沒改過的模板文字");
+    if (name === DATA_FLOW && !body.startsWith("不適用")) {
+      const lines = got.get(name);
+      const at = lines.findIndex((l) => l.trim() === "### " + NUMBER_SOURCE);
+      if (at < 0) errors.push("「## " + name + "」缺少「### " + NUMBER_SOURCE + "」");
+      else if (!lines.slice(at + 1).some((l) => l.trim().startsWith("```"))) errors.push("「### " + NUMBER_SOURCE + "」沒有程式碼區塊，寫出算出數字的指令");
+    }
   }
   return errors;
 }
