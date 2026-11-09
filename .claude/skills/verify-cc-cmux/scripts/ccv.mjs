@@ -1094,18 +1094,19 @@ function sysCompare() {
   const bundle = "com.apple.ActivityMonitor";
   const app = (cua("list_apps", {}).apps || []).find((a) => a.bundle_id === bundle && a.running);
   if (!app) fail("找不到執行中的活動監視器");
-  const win = (cua("list_windows", { pid: app.pid }).windows || [])[0];
-  if (!win) fail("活動監視器沒有 window");
+  const area = (w) => (w.bounds?.width ?? 0) * (w.bounds?.height ?? 0);
+  const win = (cua("list_windows", { pid: app.pid }).windows || []).filter((w) => w.title).sort((a, b) => area(b) - area(a))[0];
+  if (!win) fail("活動監視器沒有主視窗");
   const line = progressLine(state.sys.workspace);
-  const ws = cua("get_window_state", { pid: app.pid, window_id: win.window_id, include_screenshot: true });
-  const texts = (ws.elements || []).filter((e) => /記憶體|GB|Memory/.test((e.label || "") + " " + (e.value || ""))).map((e) => e.role + " " + JSON.stringify(e.label || "") + " " + JSON.stringify(e.value || ""));
-  const shot = ws.screenshot_path || ws.screenshot?.path || null;
-  if (shot && existsSync(shot)) execFileSync("cp", [shot, join(state.evidenceDir, "sys-compare.png")]);
-  else sh("screencapture", ["-x", "-l", String(win.window_id), join(state.evidenceDir, "sys-compare.png")], { allowFail: true });
+  const ws = cua("get_window_state", { pid: app.pid, window_id: win.window_id, include_screenshot: false, max_elements: 5000 });
+  const statics = (ws.elements || []).filter((e) => e.role === "AXStaticText").map((e) => e.label || e.value || "");
+  const at = statics.indexOf("Memory Used:");
+  const texts = at >= 0 ? statics.slice(at - 2, at + 14) : [];
+  sh("screencapture", ["-x", "-o", "-l", String(win.window_id), join(state.evidenceDir, "sys-compare.png")], { allowFail: true });
   const memLines = (sh("vm_stat", [], { allowFail: true }) || "").split("\n").filter((l) => /Anonymous|purgeable|wired|occupied by compressor|page size/.test(l));
   writeFileSync(join(state.evidenceDir, "sys-compare.txt"), now() + "\n" + line + "\n\n## 活動監視器 AX 文字\n" + (texts.join("\n") || "(沒有)") + "\n\n## vm_stat\n" + memLines.join("\n") + "\n");
   log(state, "sys-compare " + line);
-  console.log("SYS COMPARE " + line + "\n" + (texts.join("\n") || "(活動監視器 AX 沒有記憶體文字，看 sys-compare.png)"));
+  console.log("SYS COMPARE " + line + "\n" + (texts.join("\n") || "(活動監視器 AX 沒有 Memory Used，確認它在 Memory 分頁，再看 sys-compare.png)"));
 }
 
 const [cmd, ...rest] = process.argv.slice(2);

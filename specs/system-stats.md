@@ -22,7 +22,7 @@
 - 本機 `top -l 2 -n 0` 印出 `CPU usage: 30.63% user, 11.98% sys, 57.37% idle`。這是所有核心合計的比例。
 - 本機 `sysctl hw.memsize` 是 51539607552（48 GiB）。
 - `top` 的 `PhysMem: 46G used` 包含檔案快取（`vm_stat` 的 File-backed 12.5 GiB），不能當已用量。
-- `vm_stat` 算出：Anonymous − purgeable 24.6 GiB、wired 3.7 GiB、壓縮 5.3 GiB，合計 33.7 GiB。活動監視器「已使用的記憶體」的算法 Apple 沒有公開，未查證。
+- `vm_stat` 算出：Anonymous − purgeable 24.6 GiB、wired 3.7 GiB、壓縮 5.3 GiB，合計 33.64 GiB。活動監視器「已使用的記憶體」的算法 Apple 沒有公開，未查證。
 - Node 的 `os.cpus()` 回傳每顆核心的累計時間（user、nice、sys、idle、irq）。兩次取樣相減可算 CPU 使用率。和 `top` 是否一致，未實測。
 - 面板標題列與 7d 列在 `sidebars/services.js:131-141`。7d 的紅色是 `#FF453A`，門檻 85%，用四捨五入後的整數判斷（`sidebars/services.js:72-77`）。
 - `tests/harness.mjs` 模擬 `data.workspaces` 與 `data.clock`（`tests/harness.mjs:54`）。
@@ -46,6 +46,7 @@
 | 停止後 | 收到 SIGINT、SIGTERM、SIGHUP 時先 `cmux clear-progress` 再結束；寫入時間超過 30 秒時顯示 `系統狀況 已停止更新` | 最危險的是程式停了、畫面還顯示舊數字。 |
 | 沒資料時 | 不顯示這一行 | 沒開「系統」workspace 就是不想看。 |
 | 啟動方式 | README 寫一行 `cmux new-workspace --name 系統 --command ...` | 使用者自己決定要不要開。 |
+| 修正範例值（實作時） | 資料流範例的已用量由 33.69 改成 33.64，`progress` 存的值改成兩位小數 | 規劃時沒有從 `vm_stat` 頁數重算，實作第 8 條測試時發現。`sidebar-state` 的兩位小數是 `ccv sys-set` 實跑看到的。 |
 
 ## 成功條件
 
@@ -78,16 +79,16 @@
 
 ## 資料流範例
 
-範例的值：寫入時間 1793630000，面板的 `clock.epoch` 是 1793630005。`W` 代表任意的寫入時間。「cmux 存的值」的格式照 7d 功能實跑的 `sidebar-state` 輸出（`specs/claude-rate-limit.md` 的資料流範例），這個功能的 label 未實測。
+範例的值：寫入時間 1793630000，面板的 `clock.epoch` 是 1793630005。`W` 代表任意的寫入時間。「cmux 存的值」照 2026-11-09 `ccv sys-set` 實跑的 `sidebar-state` 輸出：cmux 把 `progress` 的值存成兩位小數，label 照原樣保存。
 
 | 情況 | 來源的值 | 寫入的指令或呼叫 | cmux 存的值 | 面板讀哪個欄位 | 畫面文字或 cmux() 呼叫 |
 |------|----------|------------------|-------------|----------------|------------------------|
-| 正常 | CPU 42.3%；Anonymous 1614155、purgeable 9515、wired 260475、壓縮 339368 頁，page size 16384；總量 51539607552 | `cmux set-progress 0.7018 --label cc-cmux:sys:1793630000:42.3:33.69:48.00 --workspace <CMUX_WORKSPACE_ID>` | `progress=0.7018 cc-cmux:sys:1793630000:42.3:33.69:48.00` | label 第 3–6 欄 | `CPU 42% · 記憶體 33.7 / 48 GB`，`secondary` |
-| CPU ≥ 85% | CPU 84.6% | `cmux set-progress 0.7018 --label cc-cmux:sys:W:84.6:33.69:48.00 ...` | `progress=0.7018 cc-cmux:sys:W:84.6:33.69:48.00` | 第 4 欄四捨五入成 85 | `CPU 85% · 記憶體 33.7 / 48 GB`，`#FF453A` |
-| 記憶體 ≥ 85% | CPU 10%；已用 41 GiB | `cmux set-progress 0.8542 --label cc-cmux:sys:W:10.0:41.00:48.00 ...` | `progress=0.8542 cc-cmux:sys:W:10.0:41.00:48.00` | 41 ÷ 48 × 100 = 85.4，四捨五入成 85 | `CPU 10% · 記憶體 41.0 / 48 GB`，`#FF453A` |
+| 正常 | CPU 42.3%；Anonymous 1614155、purgeable 9515、wired 260475、壓縮 339368 頁，page size 16384；總量 51539607552 | `cmux set-progress 0.7008 --label cc-cmux:sys:1793630000:42.3:33.64:48.00 --workspace <CMUX_WORKSPACE_ID>` | `progress=0.70 cc-cmux:sys:1793630000:42.3:33.64:48.00` | label 第 3–6 欄 | `CPU 42% · 記憶體 33.6 / 48 GB`，`secondary` |
+| CPU ≥ 85% | CPU 84.6% | `cmux set-progress 0.7008 --label cc-cmux:sys:W:84.6:33.64:48.00 ...` | `progress=0.70 cc-cmux:sys:W:84.6:33.64:48.00` | 第 4 欄四捨五入成 85 | `CPU 85% · 記憶體 33.6 / 48 GB`，`#FF453A` |
+| 記憶體 ≥ 85% | CPU 10%；已用 41 GiB | `cmux set-progress 0.8542 --label cc-cmux:sys:W:10.0:41.00:48.00 ...` | `progress=0.85 cc-cmux:sys:W:10.0:41.00:48.00` | 41 ÷ 48 × 100 = 85.4，四捨五入成 85 | `CPU 10% · 記憶體 41.0 / 48 GB`，`#FF453A` |
 | 沒開「系統」workspace | 沒有 | 不經過：沒有監控程式 | 沒有 `cc-cmux:sys:` 的 progress | 找不到任何一筆 | 不畫這一行 |
 | 正常結束 | 程式收到 SIGINT | `cmux clear-progress --workspace <CMUX_WORKSPACE_ID>` | 沒有 `progress=` | 找不到任何一筆 | 不畫這一行 |
-| 程式被 SIGKILL | 沒有新的寫入 | 不經過：程式已結束 | `progress=0.7018 cc-cmux:sys:1793629960:42.3:33.69:48.00` | 第 3 欄 1793629960，比 `clock.epoch` 1793630005 早 45 秒 | `系統狀況 已停止更新`，`tertiary` |
+| 程式被 SIGKILL | 沒有新的寫入 | 不經過：程式已結束 | `progress=0.70 cc-cmux:sys:1793629960:42.3:33.64:48.00` | 第 3 欄 1793629960，比 `clock.epoch` 1793630005 早 45 秒 | `系統狀況 已停止更新`，`tertiary` |
 | 兩個「系統」workspace | 兩支程式 | 各自 `set-progress --workspace <各自的 id>`，寫入時間 1793629990 與 1793630000 | 兩個 workspace 各一筆 | 取第 3 欄較大的 1793630000 | 依 1793630000 那一筆的值 |
 | label 格式錯 | 別的工具執行 `cmux set-progress 0.5 --label cc-cmux:sys:x:1:2:3` | 不經過監控程式 | `progress=0.5 cc-cmux:sys:x:1:2:3` | 第 3 欄不是數字，略過 | 不畫這一筆 |
 | `cmux` 卡住 | 正常的值 | `cmux set-progress ...` 不回應，1 秒後放棄 | 不確定有沒有寫入 | 依實際存的值 | 依實際存的值；超過 30 秒沒寫入就顯示 `系統狀況 已停止更新` |
@@ -127,7 +128,7 @@
 5. 面板：兩個 workspace 各一筆，取寫入時間大的那一筆。
 6. 面板：第 3–6 欄有非數字，或欄位數不是 6 → 略過。
 7. 面板：同一個 window 同時有 `cc-cmux:sys:` 與 `cc-cmux:7d:` → 兩種列都畫，7d 列的文字不變。
-8. 監控程式：假 `vm_stat` 輸出（Anonymous 1614155、purgeable 9515、wired 260475、壓縮 339368，page size 16384）→ 已用 33.69 GiB。
+8. 監控程式：假 `vm_stat` 輸出（Anonymous 1614155、purgeable 9515、wired 260475、壓縮 339368，page size 16384）→ 已用 33.64 GiB。
 9. 監控程式：有 `CMUX_WORKSPACE_ID` 時，約 1 秒內呼叫 `cmux set-progress <值> --label cc-cmux:sys:<寫入時間>:<CPU%>:<已用>:<總量> --workspace <id>`，值在 0–1，CPU% 在 0–100。
 10. 監控程式：沒有 `CMUX_WORKSPACE_ID` → 不呼叫 `cmux`，exit 1。
 11. 監控程式：收到 SIGINT → 呼叫 `cmux clear-progress --workspace <id>`，然後結束。
