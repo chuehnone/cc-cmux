@@ -111,3 +111,9 @@ test("設 CC_CMUX_SYS_FIRST_MS=50 時，啟動後 0.5 秒內第一次寫入", { 
   await run(fake, { CMUX_WORKSPACE_ID: "W1", CC_CMUX_SYS_FIRST_MS: "50" }, { stopAfter: 500 });
   assert.ok(setCalls(fake.calls()).length >= 1, "0.5 秒內沒有寫入：" + fake.calls().join(" | "));
 });
+
+test("設 CC_CMUX_SYS_TIMEOUT_MS=100 時，cmux 卡住也在 1 秒內呼叫 2 次", { timeout: 8000 }, async () => {
+  const fake = fakeBin({ cmuxBody: "sleep 30" });
+  await run(fake, { CMUX_WORKSPACE_ID: "W1", CC_CMUX_SYS_FIRST_MS: "50", CC_CMUX_SYS_INTERVAL_MS: "100", CC_CMUX_SYS_TIMEOUT_MS: "100" }, { stopAfter: 1000, signal: "SIGKILL" });
+  assert.ok(setCalls(fake.calls()).length >= 2, "只呼叫了 " + setCalls(fake.calls()).length + " 次");
+});

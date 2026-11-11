@@ -9,11 +9,12 @@ if (!workspace) {
 
 const INTERVAL_MS = Number(process.env.CC_CMUX_SYS_INTERVAL_MS) || 10000;
 const FIRST_MS = Number(process.env.CC_CMUX_SYS_FIRST_MS) || 1000;
+const TIMEOUT_MS = Number(process.env.CC_CMUX_SYS_TIMEOUT_MS) || 1000;
 const GiB = 1024 ** 3;
 
 const run = (cmd, args) =>
   new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 1000, encoding: "utf8" }, (err, stdout) => resolve(err ? null : stdout));
+    execFile(cmd, args, { timeout: TIMEOUT_MS, encoding: "utf8" }, (err, stdout) => resolve(err ? null : stdout));
   });
 
 const cpuTimes = () => {
