@@ -105,3 +105,9 @@ test("每次寫入後在 stdout 印一行目前的數字", { timeout: 8000 }, as
   const r = await run(fake, { CMUX_WORKSPACE_ID: "W1" });
   assert.match(r.stdout, /CPU \d+% · 記憶體 33\.6 \/ \d+ GB/);
 });
+
+test("設 CC_CMUX_SYS_FIRST_MS=50 時，啟動後 0.5 秒內第一次寫入", { timeout: 8000 }, async () => {
+  const fake = fakeBin();
+  await run(fake, { CMUX_WORKSPACE_ID: "W1", CC_CMUX_SYS_FIRST_MS: "50" }, { stopAfter: 500 });
+  assert.ok(setCalls(fake.calls()).length >= 1, "0.5 秒內沒有寫入：" + fake.calls().join(" | "));
+});

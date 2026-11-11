@@ -8,6 +8,7 @@ if (!workspace) {
 }
 
 const INTERVAL_MS = Number(process.env.CC_CMUX_SYS_INTERVAL_MS) || 10000;
+const FIRST_MS = Number(process.env.CC_CMUX_SYS_FIRST_MS) || 1000;
 const GiB = 1024 ** 3;
 
 const run = (cmd, args) =>
@@ -53,7 +54,7 @@ const tick = async () => {
 let timer = setTimeout(async function loop() {
   await tick();
   if (!stopping) timer = setTimeout(loop, INTERVAL_MS);
-}, 1000);
+}, FIRST_MS);
 
 const stop = async () => {
   if (stopping) return;
