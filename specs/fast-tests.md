@@ -17,6 +17,11 @@ pre-commit 每次 commit 都會跑，測試太慢會拖慢每一次 commit。202
 - `monitor/system-stats.mjs:15` 把 `execFile` 的 timeout 寫死在 1000 ms。「cmux 卡住」的測試假 cmux 會 `sleep 30`，每次呼叫都等滿 1 秒，所以這個測試要 4.2 秒。
 - 「1 秒內結束」的測試有兩個：`tests/report-rate-limit.test.mjs:80`（`statusline/report-rate-limit.mjs:17` 的 1000 ms）與 `tests/register-agent.test.mjs:82`（`hooks/register-agent.mjs:13` 的 1000 ms）。兩個各約 1.02 秒。
 - `report-rate-limit.test.mjs` 其他測試各約 0.33～0.39 秒，依序加起來約 2.3 秒。
+- 一個測試的時間拆開量（2026-11-11）：
+  - node 啟動：`/usr/bin/time -p node -e 0` 三次都是 `real 0.01`。
+  - 新建的腳本第一次執行：建一個 `#!/bin/sh` 腳本後連跑三次，`real` 是 0.32、0.00、0.00。4 個新腳本同時執行是 0.41。
+  - report-rate-limit 的寫入程式：每次新建假 cmux 時是 210、124、135 ms；重複用同一個假 cmux 時是 48、41、27 ms。量測腳本用 `spawnSync` 執行 `statusline/report-rate-limit.mjs`，假 cmux 只有 `exit 0`。
+- 所以每個測試的額外時間，主要是新建的假 `cmux`、`vm_stat` 第一次執行。每個測試都呼叫 `fakeBin()` 或 `fakeCmux()` 新建腳本。並行時這段等待會疊在一起：system-stats 改成並行後，子行程第一次輸出在 712～1244 ms，設了 `CC_CMUX_SYS_FIRST_MS=50` 也一樣，11 個測試有 10 個失敗。
 
 ## 決策
 
@@ -26,7 +31,8 @@ pre-commit 每次 commit 都會跑，測試太慢會拖慢每一次 commit。202
 | 監控程式的指令逾時 | 新增 `CC_CMUX_SYS_TIMEOUT_MS`，預設 1000 | 同上。「cmux 卡住」的測試才能用短的逾時。（自動採用建議） |
 | 預設 1 秒的第一次延遲要不要保留測試 | 保留一個測試不設 `CC_CMUX_SYS_FIRST_MS`，確認第一次寫入在 0.9 秒之後、2 秒之前 | 其他測試都改用短的值後，沒有測試保護預設值。（自動採用建議） |
 | 兩個「1 秒內結束」的測試 | 照舊測真的 1 秒，不加環境變數 | 1 秒上限是使用者看得到的保證：statusline 與 hook 不能拖住 Claude。測試要保護真的值。（自動採用建議） |
-| 測試的時間怎麼壓 | `system-stats.test.mjs` 與 `report-rate-limit.test.mjs` 的測試包進 `describe(..., { concurrency: true })`，同一個檔的測試並行 | 1 秒的測試不能縮短，依序跑的話 `report-rate-limit` 已經超過 2 秒。並行後檔的時間約等於最慢的測試。每個測試用自己的暫存資料夾，互不干擾。（自動採用建議） |
+| 測試的時間怎麼壓 | 每個測試檔的假腳本只在載入時建一次，各測試用環境變數指定記錄檔與行為（例如卡住幾秒、`vm_stat` 失敗）。`system-stats.test.mjs` 另外包進 `describe(..., { concurrency: true })` 並行 | 重複用同一個腳本，就不必每次等第一次執行。system-stats 有一個測預設 1 秒延遲的測試，依序跑會超過 2 秒，所以要並行。report-rate-limit 依序跑約 1.4 秒，不必並行。（自動採用建議） |
+| 修正：原本的「測試的時間怎麼壓」 | 原本選「兩個檔都並行」，改成上一列 | 原本只量了總時間，以為時間都花在等待。拆開量後發現主要是新建的假腳本第一次執行。並行時 11 個測試有 10 個失敗。（自動採用建議） |
 | pre-commit 跑什麼 | 在 `check-no-comments` 之後、`check-spec` 之前跑 `node --test tests/*.test.mjs`，失敗就 exit 1 | 跑全部測試最簡單。測試只要 2 秒以內，就不必挑檔。（自動採用建議） |
 | 要不要新增功能檔 | 不新增。驗收用 `system-stats.md` 的 `sys-row` 與 `sys-stop` 做回歸 | 使用者看得到的行為不變，沒有新的 sub-feature。（自動採用建議） |
 
@@ -43,7 +49,7 @@ pre-commit 每次 commit 都會跑，測試太慢會拖慢每一次 commit。202
 | 情況 | 行為 |
 |------|------|
 | 環境變數不是數字或是 0 | `Number(...) \|\| 預設值` 回到 1000 |
-| 測試並行時機器很忙 | 每個測試的等待時間要留餘裕，例如短逾時的測試至少等 3 輪 |
+| 測試並行時機器很忙 | 每個測試的等待時間要留餘裕，例如短逾時的測試至少等 3 輪。假腳本在測試開始前先各執行一次 |
 | commit 只改文件 | pre-commit 一樣跑全部測試 |
 | 工作區有沒 stage 的程式改動 | pre-commit 跑的是工作區的檔案，不是 staged 的版本。記在 README 的「維護」 |
 
@@ -56,8 +62,8 @@ pre-commit 每次 commit 都會跑，測試太慢會拖慢每一次 commit。202
 | 檔案 | 改什麼 |
 |------|--------|
 | `monitor/system-stats.mjs` | 讀 `CC_CMUX_SYS_FIRST_MS` 與 `CC_CMUX_SYS_TIMEOUT_MS`，預設 1000 |
-| `tests/system-stats.test.mjs` | 改用短的值；保留一個測預設延遲的測試；測試包進並行的 `describe` |
-| `tests/report-rate-limit.test.mjs` | 測試包進並行的 `describe` |
+| `tests/system-stats.test.mjs` | 假腳本只建一次；改用短的值；保留一個測預設延遲的測試；測試包進並行的 `describe` |
+| `tests/report-rate-limit.test.mjs` | 假 cmux 只建一次，各測試用環境變數指定記錄檔與卡住的秒數 |
 | `.githooks/pre-commit` | 跑 `node --test tests/*.test.mjs` |
 | `README.md` | 「維護」表加一列；監控程式一節寫出兩個新的環境變數 |
 | `.claude/skills/retro-cc-cmux/log.md` | 加一筆紀錄 |
