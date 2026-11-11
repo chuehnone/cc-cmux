@@ -1,24 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const WRITER = new URL("../statusline/report-rate-limit.mjs", import.meta.url).pathname;
 
-function fakeCmux(body = "") {
-  const dir = mkdtempSync(join(tmpdir(), "cc-cmux-fake-"));
-  const log = join(dir, "calls.txt");
-  writeFileSync(join(dir, "cmux"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + JSON.stringify(log) + "\n" + body);
-  chmodSync(join(dir, "cmux"), 0o755);
-  return { dir, calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
+const BIN = mkdtempSync(join(tmpdir(), "cc-cmux-fake-bin-"));
+writeFileSync(join(BIN, "cmux"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_LOG\"\n[ -n \"$FAKE_CMUX_SLEEP\" ] && sleep \"$FAKE_CMUX_SLEEP\"\nexit 0\n");
+chmodSync(join(BIN, "cmux"), 0o755);
+execFileSync(join(BIN, "cmux"), [], { env: { FAKE_LOG: "/dev/null" } });
+
+function fakeCmux({ sleep = "" } = {}) {
+  const log = join(mkdtempSync(join(tmpdir(), "cc-cmux-fake-")), "calls.txt");
+  return { env: { FAKE_LOG: log, FAKE_CMUX_SLEEP: sleep }, calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
 }
 
 function runWriter(input, env, fake) {
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const child = spawn(process.execPath, [WRITER], { env: { PATH: fake.dir + ":" + process.env.PATH, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [WRITER], { env: { PATH: BIN + ":" + process.env.PATH, ...fake.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     child.stdout.on("data", (d) => { stdout += d; });
     const killer = setTimeout(() => child.kill("SIGKILL"), 4000);
@@ -78,7 +80,7 @@ test("stdin 不是 JSON 時不印 stdout，exit 0", { timeout: 5000 }, async () 
 });
 
 test("cmux 卡住時 1 秒內結束，exit 0", { timeout: 5000 }, async () => {
-  const fake = fakeCmux("sleep 10\n");
+  const fake = fakeCmux({ sleep: "10" });
   const r = await runWriter(sevenDay(78), { CMUX_WORKSPACE_ID: "W1" }, fake);
   assert.equal(r.code, 0);
   assert.ok(r.ms < 1500, "花了 " + r.ms + "ms");
