@@ -1,6 +1,6 @@
 ---
 name: ship-cc-cmux
-description: 自動完成 cc-cmux 一個功能的全部流程：用 plan-cc-cmux 的自動模式規劃並 commit，用 implement-cc-cmux 實作與驗證，全部通過後 commit 並 push。過程發現錯誤時，用 retro-cc-cmux 檢討並改進 skill，再回到 plan 修正。使用者說「ship」「自動做完」「規劃到 push 一次做完」「ship-cc-cmux」時使用。
+description: 自動完成 cc-cmux 一個功能的全部流程：用 plan-cc-cmux 的自動模式規劃並 commit，用 implement-cc-cmux 實作與驗證，全部通過後 commit 並 push。過程發現錯誤時，用 retro-cc-cmux 檢討並改進 skill，再回到 plan 修正。輸入是問題而不是功能時（例如「為什麼…」「查…」），只調查並回報，不規劃也不寫 spec。使用者說「ship」「自動做完」「規劃到 push 一次做完」「ship-cc-cmux」時使用。
 ---
 
 # 自動完成 cc-cmux 的一個功能
@@ -19,9 +19,26 @@ plan-cc-cmux（自動模式）→ commit → implement-cc-cmux（TDD、驗證、
 
 - commit 直接在 main 上做，照 repo 規則。
 - 全部通過後，push 到 origin/main。
-- retro-cc-cmux 以自動模式修改 skill，不先問使用者。
+- retro-cc-cmux 以自動模式修改 skill，不先問使用者。改動照常 commit。retro 改到 `scripts/`、`.githooks/`、模板或任何 SKILL.md 時，push 前停下來給使用者看，見「停下來問使用者」。
+- 這個授權不包含 commit 與 push 以外的對外動作，例如 issue 留言、開 issue、關閉 issue。
 
 這是全域 CLAUDE.md「commit 與 push 要使用者明示要求」與「檢討後先和使用者確認做法」的例外，只限這個 repo、只限這個 skill 啟動的流程。
+
+## 0. 判斷輸入
+
+輸入是問題而不是功能時（例如「為什麼…」「查…」），照這個順序做：
+
+1. 只調查。不進入 plan，不寫 spec，不改程式。
+2. 回報調查結果：問題、查到的事實與證據、原因、還沒查明的部分。
+3. 調查結果需要改程式時，寫出建議的改法。使用者決定要不要另開一次 ship。
+
+調查結果照這個方式記錄：
+
+- 和既有功能有關時，寫進那個功能檔的 Gotchas，附日期與 run id。
+- 有對應的 issue 時，先給使用者看留言草稿，確認後才送出。
+- 不新增調查專用的檔案或目錄。
+
+輸入是功能時，從第 1 節開始。
 
 ## 1. 開始
 
@@ -47,11 +64,14 @@ plan-cc-cmux（自動模式）→ commit → implement-cc-cmux（TDD、驗證、
 - spec 自相矛盾，或和實測的事實不符。例如 `ccv probe` 讀到的值和 spec 寫的不同。
 - 照 spec 寫的測試通過了，實跑卻不符合成功條件。
 - verify 的 sub-feature FAIL，而且不是已知問題。
+- ccv 的判斷回報了錯的 PASS 或 FAIL。例如實跑時發現 `ccv check-focus` 把成功的跳轉判成 FAIL。當場修好 ccv 也一樣要檢討。
 
 不算「發現錯誤」：
 
-- 已知問題造成的 FAIL，例如 issue #1（cmux 沒更新 port）、issue #2（跳轉按鈕點了沒反應）。照實記錄 FAIL，繼續流程。
+- 已知問題造成的 FAIL。照實記錄 FAIL，繼續流程。
 - 前景不是 cmux、螢幕被鎖定。這是環境問題，照第 3 節處理。
+
+已知問題只指一種情況：功能檔的 Gotchas 寫了 issue 編號，而且 `gh issue view <N>` 回報 OPEN。兩項都成立才算已知問題。其他 FAIL 一律算「發現錯誤」。
 
 發現錯誤時，照這個順序做：
 
@@ -90,6 +110,8 @@ plan-cc-cmux（自動模式）→ commit → implement-cc-cmux（TDD、驗證、
 - 同一個功能回頭修了 2 次，還是發現錯誤。
 - 發現範圍外的問題，例如既有功能的錯誤。先記錄，問使用者要不要另開一次 ship。
 - 開始前工作區不乾淨，或測試已經失敗。
+- 這次流程中，retro 改到 `scripts/`、`.githooks/`、模板或任何 SKILL.md。push 前停下來，列出 retro 的每個 commit 與 diff 摘要。使用者確認後才 push。理由：retro 能改到擋住這個流程的檢查。
+- 要做 commit 與 push 以外的對外動作，例如 issue 留言、開 issue、關閉 issue。先給使用者看要送出的內容，確認後才送出。理由：2026-11-03 第 1 次 ship 直接在 issue #2 留言並關閉，沒有先給草稿。
 
 ## 注意
 

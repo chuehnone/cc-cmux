@@ -75,7 +75,9 @@ spec 的「ccv 需要的擴充」不是「無」時，先擴充 `.claude/skills/
 | 證據 | `~/.cache/cc-cmux-verify/<run>/` |
 | commit | 每一輪的 hash |
 
-驗證不了的部分寫「未驗證」，不算通過。例如 2 倍螢幕、`services-focus`、`services-open`。已知問題（例如 issue #1 的 cmux 沒更新 port）照實寫出，不要延長等待時間來湊出通過。
+驗證不了的部分寫「未驗證」，不算通過。目前未驗證的項目見 `.claude/skills/verify-cc-cmux/features/README.md` 的「未驗證」一節。
+
+已知問題照實寫出，不要延長等待時間來湊出通過。已知問題只指一種情況：功能檔的 Gotchas 寫了 issue 編號，而且 `gh issue view <N>` 回報 OPEN。兩項都成立才算已知問題。其他 FAIL 一律照 FAIL 處理。
 
 ## 注意
 
@@ -84,4 +86,4 @@ spec 的「ccv 需要的擴充」不是「無」時，先擴充 `.claude/skills/
 - harness 只認得 `tests/harness.mjs` 的 `VIEW_TYPES` 列出的 view。modifier（例如 `.font()`）都會被接受，但只記錄 `fill` 和 `color` 的值。用到新的 view，或要檢查其他 modifier 的值時，要擴充 harness，並確認舊測試全過。
 - 跑測試和 commit 分開下指令。先看測試結果全部通過，再 commit。
 - 驗證前確認前景 app 是 cmux：`lsappinfo info -only name $(lsappinfo front)`。前景不是 cmux 時跑出的結果不算數，要重跑。
-- 被 ship-cc-cmux 呼叫時，發現 spec 自相矛盾、和實測不符，或 sub-feature FAIL（不是已知問題）時，停下來回報給 ship-cc-cmux。不要自己改 spec。
+- 被 ship-cc-cmux 呼叫時，發現 spec 自相矛盾、和實測不符、sub-feature FAIL（不是已知問題），或 ccv 的判斷回報了錯的 PASS 或 FAIL 時，停下來回報給 ship-cc-cmux。不要自己改 spec。
