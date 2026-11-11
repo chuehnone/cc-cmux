@@ -1,6 +1,6 @@
 ---
 name: verify-cc-cmux
-description: 像使用者一樣操作 cc-cmux 的 cmux 右側欄面板「Services」，並留下證據。面板是 GUI，在 cmux app 裡執行。改了 sidebars/services.js、要證明面板的列表或按鈕（開啟、跳轉、停止）真的可用、或使用者說「驗證 Services 面板」「實際點點看」時使用。
+description: 像使用者一樣操作 cc-cmux 的 cmux 右側欄面板「Services」，並留下證據。面板是 GUI，在 cmux app 裡執行。改了 sidebars/services.js、monitor/、statusline/ 或 hooks/，要證明面板的列表、按鈕（開啟、跳轉、停止）或這些目錄的功能真的可用、或使用者說「驗證 Services 面板」「實際點點看」時使用。
 ---
 
 # 驗證 cc-cmux 的 Services 面板
@@ -163,7 +163,6 @@ cleanup 不關其他 window，不依行程名稱 kill，也不刪證據目錄。
 | `ccv click <open\|focus\|stop> [bg]` | 點面板上的按鈕。加 `bg` 時點背景服務那一列 |
 | `ccv check-stop` | 停止後的兩項檢查，各自回報 PASS 或 FAIL |
 | `ccv bg-start` | 在本次 run 的 window 開一個 workspace，執行 `claude -p --model haiku`，請它用背景 Bash 啟動測試 server（port 18750–18799）。等到三件事成立才回報 `BG READY`：cmux 把它記錄成 agent、server 是它的子孫且沒有 tty、`sidebar-state` 有這個 port。最多等 120 秒，會用到 token |
-| `ccv click <open\|focus\|stop> bg` | 點背景服務那一列的按鈕 |
 | `ccv bg-start --count N` | 在同一個分頁啟動 N 個 `claude -p`（1–4），各用背景 Bash 啟動一個 server，port 不同。就緒條件：每個 port 都在 LISTEN、server 是某個 claude 的子孫、server 沒有 tty。不要求 cmux 偵測到 port，所以可當對照組 |
 | `ccv bg-start --with-hook` | 在暫存資料夾寫專案層 `.claude/settings.json`，`SessionStart` 與 `UserPromptSubmit` 執行 repo 的 `hooks/register-agent.mjs`。不改使用者的 `~/.claude/settings.json`。可與 `--count` 一起用 |
 | `ccv bg-kill <編號>` | 只結束 `bg-start` 記錄的第 N 個 claude 與它的 server（編號從 1 開始，依 port 順序） |
@@ -206,4 +205,4 @@ ccv launch && ccv doctor && ccv capture before-stop && ccv click stop && ccv che
 2. **確認 ccv 能操作新的 UI。** 逐條對照第 1 步的 Drive，確認每個操作和每個成功條件都有 `ccv` 指令可用。不能時，先擴充 `scripts/ccv.mjs`，並實跑一次證明能用，再開始實作。
 3. **一小段一小段做。** 用 implement-cc-cmux 實作，它照 TDD 一個行為一輪。每完成一小段，就跑一次這個功能的 Drive 和 Evidence。通過後才 commit 這一段，再做下一段。失敗時，先 `ccv cleanup`，修好再跑。
 4. **交件時附上證據，並回歸測試。** 附上新功能的證據路徑 `~/.cache/cc-cmux-verify/<run>/`。再跑一次既有功能（install、list、stop），確認舊功能沒壞。
-5. **驗證不了的部分，回報「未驗證」。** 未驗證不算通過。目前未驗證的有：2 倍螢幕上的點擊、`services-open`、空狀態。新功能用到這些地方時，先補上驗證。
+5. **驗證不了的部分，回報「未驗證」。** 未驗證不算通過。目前未驗證的項目見 `features/README.md` 的「未驗證」一節。新功能用到這些地方時，先補上驗證。

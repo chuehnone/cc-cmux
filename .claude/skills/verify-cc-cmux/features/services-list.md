@@ -36,4 +36,4 @@ Preconditions:
 - 面板只列出分頁 tty 上的行程。Claude 背景 Bash 啟動的服務沒有 tty，不會出現在面板上。cmux 仍會在 workspace 層的 ports 偵測到它。
 - 面板列出的 port 可能包含使用者其他 window 的服務。這一點沒有驗證過。只操作 `:<測試 port>` 那一列。
 - 副標太長時會從中間截斷。比對時只看開頭，不要比對全文。
-- `list-agent-dot` 與 `list-empty` 都沒有驗證過。
+- `list-empty` 沒有驗證過。
