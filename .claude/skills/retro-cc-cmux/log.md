@@ -13,6 +13,15 @@
 - 證明：怎麼證明有效；證明不了時寫「未證明」與原因
 ```
 
+## 2026-11-11 pre-commit 跑測試（接 2026-11-02 測試失敗仍然 commit）
+
+- 錯在哪裡：2026-11-02 那筆用文字規則擋「測試和 commit 串在一起」，沒擋住。session 紀錄中，`node --test … | grep … && git commit` 這種寫法出現 2 次（2026-11-01T13:19Z 與 17:47Z，UTC）。grep 找到 `# fail N` 也回傳成功，`&&` 擋不住。那 2 次測試剛好全過。
+- 怎麼發現的：2026-11-11 檢視三個 session 的紀錄時找到。
+- 根本原因：當時沒加 pre-commit，理由是「每次 commit 多花約 1 秒」。這個數字在 `3ba9bfe`（2026-11-09 加入 system-stats 測試）之後不成立：2026-11-11 實測全部測試要約 16.8 秒。
+- 擋法：git hook。
+- 改了什麼：先把測試壓到 2 秒以內（`specs/fast-tests.md`），再讓 `.githooks/pre-commit` 跑 `node --test tests/*.test.mjs`，失敗就擋下 commit。README「維護」表加一列。
+- 證明：反向測試。在 `tests/services.test.mjs` 暫時加一個一定失敗的測試，執行 `git commit`：回傳 1，印出 `not ok` 與 `pre-commit：單元測試失敗，已擋下 commit。`，HEAD 不變。還原後全部測試連跑 5 次，都是 `# fail 0`，`# duration_ms` 在 1378～1441。限制：pre-commit 跑的是工作區的檔案，不是 staged 的版本。
+
 ## 2026-11-11 用總時間推論測試慢的原因
 
 - 錯在哪裡：`specs/fast-tests.md`（commit `744e9c7`）的 How 只寫了每個測試要幾秒，例如 report-rate-limit「其他測試各約 0.33～0.39 秒」，沒有寫時間花在哪一段。依此決定「同一個檔的測試並行」。實作第 3 輪把 system-stats 的測試改成並行後，11 個測試有 10 個失敗。這一輪沒有 commit。

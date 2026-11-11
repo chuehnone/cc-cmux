@@ -151,6 +151,8 @@ cmux new-workspace --name 系統 --command "node <cc-cmux 的路徑>/monitor/sys
 
 停止：在「系統」分頁按 Ctrl+C，或關掉這個 workspace。程式結束前會清掉自己寫的 `progress`，面板那一行跟著消失。
 
+可以用環境變數調整時間，平常不必設，單元測試會用：`CC_CMUX_SYS_INTERVAL_MS` 是寫入的間隔，預設 10000；`CC_CMUX_SYS_FIRST_MS` 是啟動後第一次寫入的時間，預設 1000；`CC_CMUX_SYS_TIMEOUT_MS` 是每次執行 `vm_stat` 與 `cmux` 最多等多久，預設 1000。單位都是毫秒。值是空的、0 或不是數字時，用預設值。
+
 不要在「系統」workspace 開 Claude。理由：7d 額度也寫 `progress`，兩支程式會互相覆蓋。
 
 ### 已知限制
@@ -193,6 +195,7 @@ git config core.hooksPath .githooks
 |------|----------|
 | 程式（`.js` `.mjs` `.cjs` `.ts`）不要有註解 | `.githooks/pre-commit` 執行 `scripts/check-no-comments.mjs --staged` |
 | `specs/*.md` 有模板的每一節、沒有留下模板原文、「未決問題」是空的；「資料流範例」不是「不適用」時，要有「### 數字的來源」小節，而且小節裡有程式碼區塊 | `.githooks/pre-commit` 執行 `scripts/check-spec.mjs --staged` |
+| 單元測試失敗時不能 commit | `.githooks/pre-commit` 執行 `node --test tests/*.test.mjs`。跑的是工作區的檔案，不是 staged 的版本。全部測試約 1.4 秒（2026-11-11 實測） |
 
 要說明程式的用途或理由時，寫進 README。
 

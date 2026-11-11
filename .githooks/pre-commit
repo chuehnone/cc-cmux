@@ -1,4 +1,5 @@
 #!/bin/sh
 ROOT="$(git rev-parse --show-toplevel)"
 node "$ROOT/scripts/check-no-comments.mjs" --staged || exit 1
+OUT="$(node --test "$ROOT"/tests/*.test.mjs 2>&1)" || { printf '%s\n' "$OUT"; echo "pre-commit：單元測試失敗，已擋下 commit。" >&2; exit 1; }
 exec node "$ROOT/scripts/check-spec.mjs" --staged
