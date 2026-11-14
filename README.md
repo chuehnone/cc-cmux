@@ -48,6 +48,22 @@ cmux 只從 `~/.config/cmux/sidebars/` 讀 sidebar。照這個順序做：
    cmux right-sidebar set custom services
    ```
 
+### 切到 Files 之後找回面板
+
+在右側欄點了 Files、Find 這類按鈕後，Services 就不見了。右側欄上方沒有切回 Services 的按鈕。要切回來，再執行一次第 4 步的指令。
+
+cmux 文件說，`set custom` 會在右側欄上方加一顆 Custom 按鈕。2026-11-14 實測 cmux 0.65.2，沒有出現這顆按鈕。在按鈕列按右鍵，選單只有 Files、Find、Vault、Dock、Cloud，也沒有 Custom 可以勾選。
+
+右側欄不能切成上下兩半。cmux 文件寫明，右側欄一次只顯示一種模式。Dock 模式可以切成上下，但只能放終端機和瀏覽器。
+
+要同時看 Files 和 Services，把 Services 開成主畫面的窗格：
+
+```sh
+cmux sidebar open services
+```
+
+這個窗格只在執行指令的 workspace 裡。按窗格分頁上的 × 可以關掉。2026-11-14 實測：開窗格後點右側欄的 Files，窗格還在。
+
 ### 讓每個 Claude Code session 都被記錄（選用）
 
 cmux 對 Claude Code 只用一個固定的 key 記錄 agent PID。同一個 workspace 有多個 Claude Code session 時，只有最後送出 hook 的那一個被記錄，其他 session 用背景 shell 啟動的服務就不會出現在面板上。
